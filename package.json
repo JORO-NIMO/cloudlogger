@@ -1,0 +1,14 @@
+{
+  "name": "serverless-logger",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.17.0",
+    "vitest": "^1.0.0",
+    "wrangler": "^4.160.1"
+  }
+}
