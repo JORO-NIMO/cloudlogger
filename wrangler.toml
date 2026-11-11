@@ -1,11 +1,9 @@
 name = "serverless-logger-api"
 main = "src/index.js"
 compatibility_date = "2026-11-09"
-pages_build_output_dir = "public"
 
-[vars]
-WHOP_PLAN_PRICE = "5"
-WHOP_CHECKOUT_URL = "https://whop.com/safespaceshub/cloudlogger"
+# Secrets are NOT stored here. Set them with: npx wrangler secret put <NAME>
+#   HASHING_SECRET, CLIENT_API_TOKEN, WHOP_WEBHOOK_SECRET
 
 [[d1_databases]]
 binding = "DB"

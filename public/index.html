@@ -2,1526 +2,608 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Safe Spaces CloudLogger | Edge Log-as-a-Service Platform</title>
-  <link rel="icon" type="image/png" href="/SafeSpacesLogo.png" />
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CloudLogger</title>
+  <meta name="description" content="CloudLogger keeps a simple, private diary of what happens on your website." />
+  <link rel="icon" href="/SafeSpacesLogo.png" type="image/png" />
   <style>
-    /* Balanced Color Palette: 1/3 Navy Blue (#0a1931), 1/3 Crisp White (#ffffff), 1/3 Vibrant Orange (#ff6a00) */
-    body {
-      background-color: #f8fafc; /* Crisp Light Slate Canvas */
-      color: #0f172a;
-      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-      -webkit-tap-highlight-color: transparent;
-      overflow-x: hidden;
+    :root {
+      --navy: #0a1931; --navy-2: #14294d; --orange: #ff6a00; --orange-text: #b93c00;
+      --white: #ffffff; --soft: #f4f6fa; --line: #dbe1ec; --ink: #0a1931; --muted: #4a5a78;
+      --radius: 14px;
     }
-    .touch-target {
-      min-height: 44px;
-      min-width: 44px;
-    }
-    ::-webkit-scrollbar {
-      width: 5px;
-      height: 5px;
-    }
-    ::-webkit-scrollbar-track {
-      background: #f1f5f9;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #cbd5e1;
-      border-radius: 9999px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #ea580c;
-    }
-    @keyframes skeleton-shimmer {
-      0% { opacity: 0.4; }
-      50% { opacity: 0.8; }
-      100% { opacity: 0.4; }
-    }
-    .skeleton-box {
-      animation: skeleton-shimmer 1.4s infinite ease-in-out;
-      background: #e2e8f0;
-    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: var(--ink); background: var(--white); line-height: 1.6; -webkit-text-size-adjust: 100%; }
+    h1, h2, h3 { line-height: 1.2; margin: 0 0 .6em; }
+    p { margin: 0 0 1em; }
+    a { color: inherit; }
+    img { max-width: 100%; }
+    .hidden { display: none !important; }
+    .wrap { width: min(1120px, 100% - 2.5rem); margin-inline: auto; }
+    :focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 0 1.3rem; border-radius: 999px; border: 2px solid transparent; font: inherit; font-weight: 700; cursor: pointer; text-decoration: none; transition: transform .12s ease, background .12s ease; }
+    .btn:active { transform: scale(.98); }
+    .btn-primary { background: var(--orange); color: var(--navy); }
+    .btn-primary:hover { background: #ff7f26; }
+    .btn-dark { background: var(--navy); color: var(--white); }
+    .btn-dark:hover { background: var(--navy-2); }
+    .btn-line { background: transparent; color: inherit; border-color: currentColor; }
+    .btn-small { min-height: 40px; padding: 0 1rem; font-size: .92rem; }
+    .btn[disabled] { opacity: .6; cursor: wait; }
+
+    /* Header */
+    header.top { background: var(--navy); color: var(--white); position: sticky; top: 0; z-index: 20; }
+    .bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .7rem 0; flex-wrap: wrap; }
+    .brand { display: flex; align-items: center; gap: .7rem; text-decoration: none; font-weight: 800; font-size: 1.3rem; letter-spacing: -.01em; }
+    .brand img { height: 40px; width: auto; border-radius: 6px; background: var(--white); padding: 2px; }
+    .actions { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+    .who { color: #c7d2e6; font-size: .92rem; }
+
+    /* Landing panes */
+    .pane { padding: clamp(3rem, 8vw, 5.5rem) 0; }
+    .pane .wrap { display: grid; gap: 1.5rem; max-width: 760px; }
+    .pane h1 { font-size: clamp(2rem, 6vw, 3.1rem); letter-spacing: -.02em; }
+    .pane h2 { font-size: clamp(1.6rem, 4.5vw, 2.2rem); letter-spacing: -.01em; }
+    .pane p { font-size: 1.12rem; margin: 0; }
+    .pane .row { display: flex; gap: .8rem; flex-wrap: wrap; margin-top: .4rem; }
+    .pane-white { background: var(--white); }
+    .pane-orange { background: var(--orange); color: var(--navy); }
+    .pane-navy { background: var(--navy); color: var(--white); }
+    .pane-navy p { color: #dbe4f3; }
+    .eyebrow { font-weight: 800; letter-spacing: .08em; text-transform: uppercase; font-size: .8rem; color: var(--orange-text); }
+    .pane-orange .eyebrow { color: var(--navy); }
+    .pane-navy .eyebrow { color: var(--orange); }
+
+    /* Dashboard */
+    main.app { background: var(--soft); min-height: 70vh; padding: 2rem 0 3rem; }
+    .banner { background: var(--navy); color: var(--white); border-left: 6px solid var(--orange); border-radius: var(--radius); padding: .9rem 1.1rem; margin-bottom: 1.4rem; }
+    .title-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+    .title-row h1 { margin: 0; font-size: 1.7rem; }
+    .card { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.2rem; margin-bottom: 1rem; }
+    .site-head { display: flex; justify-content: space-between; align-items: flex-start; gap: .8rem; flex-wrap: wrap; }
+    .site-head h3 { margin: 0; font-size: 1.15rem; }
+    .domain { color: var(--muted); word-break: break-all; }
+    .badge { display: inline-block; padding: .2rem .7rem; border-radius: 999px; font-weight: 700; font-size: .82rem; }
+    .badge-ok { background: var(--navy); color: var(--white); }
+    .badge-wait { background: var(--orange); color: var(--navy); }
+    .badge-problem { background: #ffe4cf; color: var(--orange-text); }
+    .steps { background: var(--soft); border-radius: 10px; padding: 1rem 1.1rem; margin-top: .9rem; }
+    .steps ol { margin: .4rem 0 0; padding-left: 1.2rem; }
+    .steps li { margin-bottom: .6rem; }
+    .copybox { display: flex; gap: .5rem; align-items: stretch; margin-top: .35rem; flex-wrap: wrap; }
+    .copybox code { flex: 1 1 260px; background: var(--navy); color: #fff; padding: .6rem .8rem; border-radius: 8px; font-size: .85rem; overflow-wrap: anywhere; }
+    details { margin-top: .8rem; }
+    summary { cursor: pointer; font-weight: 700; min-height: 32px; }
+    pre { background: var(--navy); color: #fff; padding: .9rem; border-radius: 8px; overflow-x: auto; font-size: .82rem; }
+    .btn-row { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: .9rem; }
+    .msg { margin-top: .7rem; font-weight: 600; }
+    .msg-bad { color: var(--orange-text); }
+    table { width: 100%; border-collapse: collapse; }
+    .table-wrap { overflow-x: auto; }
+    th { text-align: left; background: var(--navy); color: #fff; padding: .65rem .8rem; font-size: .85rem; white-space: nowrap; }
+    td { padding: .65rem .8rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .empty { color: var(--muted); padding: 1.2rem .2rem; }
+
+    /* Forms and dialog */
+    label { display: block; font-weight: 700; margin: .9rem 0 .3rem; }
+    input[type=text], input[type=email], input[type=password] { width: 100%; min-height: 46px; padding: 0 .9rem; border: 2px solid var(--line); border-radius: 10px; font: inherit; color: var(--ink); background: var(--white); }
+    input:focus { border-color: var(--orange); outline: none; }
+    .hint { color: var(--muted); font-size: .9rem; margin-top: .25rem; }
+    dialog { border: none; border-radius: var(--radius); padding: 0; width: min(440px, 100% - 2rem); box-shadow: 0 20px 60px rgba(10,25,49,.4); }
+    dialog::backdrop { background: rgba(10,25,49,.65); }
+    .dlg { padding: 1.4rem; }
+    .tabs { display: flex; gap: .4rem; margin-bottom: .6rem; }
+    .tab { flex: 1; min-height: 44px; border: 2px solid var(--line); background: var(--white); border-radius: 10px; font: inherit; font-weight: 700; cursor: pointer; color: var(--ink); }
+    .tab[aria-selected=true] { background: var(--navy); color: var(--white); border-color: var(--navy); }
+    .toast { position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%); background: var(--navy); color: #fff; padding: .8rem 1.2rem; border-radius: 999px; border: 2px solid var(--orange); z-index: 50; max-width: calc(100% - 2rem); text-align: center; }
+
+    /* Footer */
+    footer.site { background: var(--navy); color: #c7d2e6; padding: 3.5rem 0 2rem; font-size: .93rem; }
+    footer.site a { color: #fff; text-decoration: none; }
+    footer.site a:hover { color: var(--orange); text-decoration: underline; }
+    .fgrid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 2rem; padding-bottom: 2.5rem; border-bottom: 1px solid #28406b; }
+    .fbrand { display: flex; align-items: center; gap: .7rem; color: #fff; font-weight: 700; margin-bottom: .8rem; }
+    .fbrand img { height: 36px; width: auto; border-radius: 6px; background: #fff; padding: 2px; }
+    footer.site h4 { color: #fff; text-transform: uppercase; letter-spacing: .06em; font-size: .78rem; margin: 0 0 .8rem; }
+    footer.site ul { list-style: none; margin: 0; padding: 0; }
+    footer.site li { margin-bottom: .5rem; }
+    .fsmall { font-size: .85rem; color: #aebbd3; }
+    .channels { display: flex; flex-wrap: wrap; gap: .9rem; margin-top: .5rem; }
+    .fbottom { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding-top: 1.4rem; font-size: .85rem; }
+    .fbottom nav { display: flex; gap: .6rem; flex-wrap: wrap; }
+
+    @media (max-width: 860px) { .fgrid { grid-template-columns: 1fr 1fr; } .fgrid > :first-child { grid-column: 1 / -1; } }
+    @media (max-width: 520px) { .fgrid { grid-template-columns: 1fr; } .brand { font-size: 1.15rem; } .who { display: none; } }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
   </style>
-
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Plus Jakarta Sans', 'sans-serif'],
-            mono: ['JetBrains Mono', 'monospace'],
-          },
-          colors: {
-            navy: {
-              950: '#060f1e',
-              900: '#0a1931',
-              850: '#0e2242',
-              800: '#142c55',
-              700: '#1c3b70',
-              600: '#274e94',
-              100: '#e7ecf5'
-            },
-            accent: {
-              400: '#fb923c',
-              500: '#f97316',
-              600: '#ea580c',
-              700: '#c2410c'
-            }
-          }
-        }
-      }
-    }
-  </script>
 </head>
-<body class="bg-slate-100/80 text-slate-900 min-h-screen font-sans antialiased selection:bg-orange-500 selection:text-white">
+<body>
 
-  <!-- ==================== TOP NAVIGATION HEADER (1/3 NAVY BLUE) ==================== -->
-  <header id="mainHeader" class="bg-navy-900 border-b border-navy-800 text-white sticky top-0 z-40 shadow-md">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex items-center justify-between h-16 gap-3">
-        
-        <!-- Logo & Brand Header -->
-        <div class="flex items-center space-x-3 shrink-0">
-          <a href="https://safespaceshub.com" target="_blank" rel="noopener noreferrer" class="flex items-center space-x-3 group">
-            <img src="/SafeSpacesLogo.png" alt="Safe Spaces Logo" class="h-9 w-auto object-contain rounded-lg shadow-sm group-hover:opacity-90 transition" />
-            <div class="flex flex-col">
-              <div class="flex items-center gap-2">
-                <span class="font-extrabold text-base sm:text-lg tracking-tight text-white">Safe Spaces</span>
-                <span class="text-xs px-2 py-0.5 rounded-full bg-orange-500 text-white font-mono font-bold">CloudLogger</span>
-              </div>
-              <span class="text-[10px] text-slate-300 font-medium">AI Innovation Hub • Edge Micro-SaaS</span>
-            </div>
-          </a>
-        </div>
-
-        <!-- Desktop Action Controls (Navy + White + Orange) -->
-        <div class="hidden md:flex items-center space-x-2.5">
-          <!-- Platform Docs Button (White) -->
-          <button id="docsBtn" class="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-navy-900 border border-slate-200 transition touch-target shadow-sm">
-            <svg class="w-4 h-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
-            <span>Platform Docs</span>
-          </button>
-
-          <!-- Whop $5 Subscription Button (Orange) -->
-          <button id="billingBtn" class="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 hover:from-orange-500 hover:to-orange-400 text-white shadow-md shadow-orange-500/25 transition touch-target">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-            </svg>
-            <span>Whop $5/mo</span>
-          </button>
-
-          <!-- Account Button (Navy Elevated) -->
-          <button id="accountBtn" class="flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-navy-800 hover:bg-navy-700 text-white border border-navy-700 transition touch-target">
-            <svg class="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-            <span id="accountBtnLabel">Sign In / Register</span>
-          </button>
-
-          <!-- Connected Sites Button (Navy Elevated) -->
-          <button id="sitesManageBtn" class="flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-navy-800 hover:bg-navy-700 text-white border border-navy-700 transition touch-target">
-            <svg class="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-            </svg>
-            <span>Sites</span>
-            <span id="sitesCountPill" class="px-2 py-0.5 rounded-full bg-orange-500 text-[10px] text-white font-extrabold">0</span>
-          </button>
-
-          <!-- Fetch Logs Button (Vibrant Orange CTA) -->
-          <button id="refreshBtn" class="flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-extrabold bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/30 transition touch-target">
-            <svg id="refreshSpinner" class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span>Fetch Logs</span>
-          </button>
-        </div>
-
-        <!-- Mobile Controls -->
-        <div class="flex items-center space-x-2 md:hidden">
-          <button id="mobileDocsBtn" title="Documentation" class="p-2.5 rounded-xl bg-white text-navy-900 touch-target flex items-center justify-center">
-            <svg class="w-5 h-5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
-          </button>
-          <button id="mobileRefreshBtn" title="Fetch Logs" class="p-2.5 rounded-xl bg-orange-500 text-white touch-target flex items-center justify-center shadow-md shadow-orange-500/20">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
-          <button id="mobileMenuBtn" title="Open Menu" class="p-2.5 rounded-xl bg-navy-800 text-white border border-navy-700 touch-target flex items-center justify-center">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
-            </svg>
-          </button>
-        </div>
-
+  <header class="top">
+    <div class="wrap bar">
+      <a class="brand" href="/" aria-label="CloudLogger home">
+        <img src="/SafeSpacesLogo.png" alt="" width="40" height="40" />
+        <span>CloudLogger</span>
+      </a>
+      <div class="actions" id="actionsOut">
+        <button class="btn btn-line btn-small" id="demoBtn" type="button">Try the demo</button>
+        <button class="btn btn-line btn-small" id="loginBtn" type="button">Log in</button>
+        <button class="btn btn-primary btn-small" id="signupBtn" type="button">Create an account</button>
       </div>
-
-      <!-- Mobile Navigation Drawer -->
-      <div id="mobileDrawer" class="hidden md:hidden border-t border-navy-800 py-3.5 space-y-2 bg-navy-950 px-2 rounded-b-2xl">
-        <button id="mobileBillingBtn" class="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-orange-600 to-orange-500 text-white text-xs font-bold touch-target">
-          <div class="flex items-center space-x-3">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-            </svg>
-            <span>Whop $5/mo Subscription Plan</span>
-          </div>
-          <span>&rarr;</span>
-        </button>
-        <button id="mobileAccountBtn" class="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-navy-800 text-white text-xs font-semibold touch-target border border-navy-700">
-          <div class="flex items-center space-x-3">
-            <svg class="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-            <span id="mobileAccountBtnLabel">Sign In / Register</span>
-          </div>
-          <span class="text-slate-400">&rarr;</span>
-        </button>
-        <button id="mobileSitesManageBtn" class="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-navy-800 text-white text-xs font-semibold touch-target border border-navy-700">
-          <div class="flex items-center space-x-3">
-            <svg class="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-            </svg>
-            <span>Connected Sites</span>
-          </div>
-          <span class="text-slate-400">&rarr;</span>
-        </button>
-        <button id="mobileConfigToggleBtn" class="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-navy-800 text-white text-xs font-semibold touch-target border border-navy-700">
-          <div class="flex items-center space-x-3">
-            <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <span>Connection Settings</span>
-          </div>
-          <span class="text-slate-400">&rarr;</span>
-        </button>
+      <div class="actions hidden" id="actionsIn">
+        <span class="who" id="whoLabel"></span>
+        <button class="btn btn-line btn-small" id="logoutBtn" type="button">Log out</button>
       </div>
-
     </div>
   </header>
 
-  <!-- ==================== SUB-BAR & SITE SELECTOR (1/3 CRISP WHITE) ==================== -->
-  <section id="siteSelectorBar" class="bg-white border-b border-slate-200/90 py-3.5 shadow-sm">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-      
-      <!-- Site Dropdown & Code Snippet -->
-      <div class="flex items-center space-x-2.5 w-full md:w-auto">
-        <span class="text-xs font-extrabold text-navy-900 shrink-0 uppercase tracking-wider">Active Site:</span>
-        <select id="activeSiteSelect" class="flex-1 md:w-64 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-navy-900 focus:outline-none focus:border-orange-500 touch-target truncate">
-          <option value="saas-platform-one">saas-platform-one (Default)</option>
-        </select>
-        <button id="quickSnippetBtn" title="Get Installation Snippet" class="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-navy-900 text-xs font-bold border border-slate-300 flex items-center space-x-1.5 shrink-0 touch-target shadow-sm">
-          <svg class="w-3.5 h-3.5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-          </svg>
-          <span>Install Code</span>
-        </button>
+  <noscript><p class="wrap" style="padding:2rem 0">Please turn on JavaScript to use CloudLogger.</p></noscript>
+
+  <!-- ========== LANDING ========== -->
+  <div id="landing">
+    <section class="pane pane-white">
+      <div class="wrap">
+        <span class="eyebrow">Welcome</span>
+        <h1>See what is happening on your website.</h1>
+        <p>CloudLogger keeps a simple diary of what happens on your website. You can see when someone places an order, signs up, or runs into a problem, all in one place. There is nothing complicated to learn. Add your website and we take care of the rest.</p>
+        <div class="row">
+          <button class="btn btn-primary" data-open="signup" type="button">Create an account</button>
+          <button class="btn btn-dark" data-open="demo" type="button">Try the demo</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="pane pane-orange">
+      <div class="wrap">
+        <span class="eyebrow">How it works</span>
+        <h2>Three easy steps</h2>
+        <p>First, create an account and add your website. Next, show us that the website is really yours by adding a short piece of text that only the owner can add. Then share a few lines with the person who looks after your website. From that moment, everything that happens appears on your page, newest first.</p>
+      </div>
+    </section>
+
+    <section class="pane pane-navy">
+      <div class="wrap">
+        <span class="eyebrow">Privacy and ownership</span>
+        <h2>Your visitors stay private. Your information stays yours.</h2>
+        <p>When your website tells us who did something, we scramble the person's name and internet address before saving anything. The scrambled version cannot be read or turned back into the original. We only record activity for websites that have been proven to belong to you. Nobody else can open your pages.</p>
+      </div>
+    </section>
+
+    <section class="pane pane-white">
+      <div class="wrap">
+        <span class="eyebrow">Get started</span>
+        <h2>Ready when you are.</h2>
+        <p>Create your account in under a minute. If you would rather look around first, open the demo to see how everything looks with example activity.</p>
+        <div class="row">
+          <button class="btn btn-primary" data-open="signup" type="button">Create an account</button>
+          <button class="btn btn-dark" data-open="login" type="button">Log in</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ========== DASHBOARD ========== -->
+  <main class="app hidden" id="app">
+    <div class="wrap">
+      <div class="banner hidden" id="demoBanner" role="status">You are looking at a demo. The websites and activity below are examples, and nothing here is real. <button class="btn btn-primary btn-small" data-open="signup" type="button" style="margin-left:.4rem">Create an account</button></div>
+
+      <div class="title-row">
+        <h1>Your websites</h1>
+        <button class="btn btn-primary" id="addSiteBtn" type="button">Add a website</button>
       </div>
 
-      <!-- Quick Action Buttons -->
-      <div class="flex items-center space-x-2.5 w-full md:w-auto">
-        <button id="sendTestLogBtn" class="flex-1 md:flex-none justify-center px-4 py-2.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 text-xs font-extrabold flex items-center space-x-1.5 touch-target shadow-sm">
-          <svg class="w-3.5 h-3.5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-          </svg>
-          <span>Send Live Test Log</span>
-        </button>
-        <button id="addNewSiteQuickBtn" class="flex-1 md:flex-none justify-center px-4 py-2.5 rounded-xl bg-navy-900 hover:bg-navy-800 text-white text-xs font-bold flex items-center space-x-1.5 touch-target shadow-sm">
-          <svg class="w-3.5 h-3.5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-          </svg>
-          <span>+ Connect Site</span>
-        </button>
-      </div>
+      <form class="card hidden" id="addSiteForm" novalidate>
+        <h2 style="font-size:1.2rem">Add a website</h2>
+        <label for="siteName">Website name</label>
+        <input id="siteName" type="text" maxlength="80" autocomplete="off" required />
+        <label for="siteDomain">Website address</label>
+        <input id="siteDomain" type="text" inputmode="url" autocomplete="off" required />
+        <p class="hint">For example: mysite.com</p>
+        <p class="msg msg-bad hidden" id="addSiteError" role="alert"></p>
+        <div class="btn-row">
+          <button class="btn btn-primary" type="submit">Add website</button>
+          <button class="btn btn-line" id="cancelAddSite" type="button">Cancel</button>
+        </div>
+      </form>
 
+      <div id="sitesList" aria-live="polite"></div>
+
+      <section class="card hidden" id="activityCard" aria-labelledby="activityTitle">
+        <div class="site-head">
+          <h2 id="activityTitle" style="font-size:1.2rem;margin:0">Activity</h2>
+          <button class="btn btn-dark btn-small" id="refreshBtn" type="button">Refresh</button>
+        </div>
+        <div class="table-wrap" id="activityBody"></div>
+      </section>
     </div>
-  </section>
-
-  <!-- ==================== MAIN CONTENT BODY (1/3 WHITE, 1/3 NAVY, 1/3 ORANGE) ==================== -->
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7 space-y-7">
-
-    <!-- KPI Cards Grid (Balanced 1/3 White, 1/3 Navy, 1/3 Orange) -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      
-      <!-- Card 1: Crisp White -->
-      <div class="bg-white border border-slate-200/90 rounded-2xl p-5 relative overflow-hidden shadow-sm hover:shadow-md transition">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs font-extrabold uppercase tracking-wider text-navy-900">Total Telemetry</span>
-          <span class="p-2 rounded-xl bg-slate-100 text-navy-900 border border-slate-200">
-            <svg class="w-4 h-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7C5 4 4 5 4 7z" />
-            </svg>
-          </span>
-        </div>
-        <div id="statTotalLogs" class="text-3xl font-extrabold text-navy-900">0</div>
-        <p class="text-xs text-slate-500 mt-1">Live events saved in Cloudflare D1</p>
-      </div>
-
-      <!-- Card 2: Deep Navy Blue -->
-      <div class="bg-navy-900 border border-navy-800 text-white rounded-2xl p-5 relative overflow-hidden shadow-md">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs font-extrabold uppercase tracking-wider text-orange-400">Active Modules</span>
-          <span class="p-2 rounded-xl bg-navy-800 text-orange-400 border border-navy-700">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-          </span>
-        </div>
-        <div id="statActiveModules" class="text-3xl font-extrabold text-white">0</div>
-        <p class="text-xs text-slate-300 mt-1">Reporting microservices</p>
-      </div>
-
-      <!-- Card 3: Crisp White with Orange Metric -->
-      <div class="bg-white border border-slate-200/90 rounded-2xl p-5 relative overflow-hidden shadow-sm hover:shadow-md transition">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs font-extrabold uppercase tracking-wider text-navy-900">Success Rate</span>
-          <span class="p-2 rounded-xl bg-orange-50 text-orange-600 border border-orange-200">
-            <svg class="w-4 h-4 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </span>
-        </div>
-        <div id="statSuccessRate" class="text-3xl font-extrabold text-orange-500">100%</div>
-        <p class="text-xs text-slate-500 mt-1">SUCCESS vs total volume</p>
-      </div>
-
-      <!-- Card 4: Vibrant Orange Card -->
-      <div class="bg-gradient-to-br from-orange-600 via-orange-500 to-amber-500 text-white rounded-2xl p-5 relative overflow-hidden shadow-lg shadow-orange-500/20">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs font-extrabold uppercase tracking-wider text-orange-100">Whop SaaS Plan</span>
-          <span class="p-2 rounded-xl bg-white/20 text-white backdrop-blur-sm">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-          </span>
-        </div>
-        <div class="text-3xl font-extrabold text-white">$5 / mo</div>
-        <p class="text-xs text-orange-100 mt-1 font-medium">Whop.com Active Access</p>
-      </div>
-
-    </div>
-
-    <!-- Filter Bar (White Container with Navy Labels) -->
-    <div class="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-stretch md:items-center gap-3 shadow-sm">
-      <div class="flex-1">
-        <label class="block text-xs font-extrabold uppercase tracking-wider text-navy-900 mb-1.5">Search Action / Hash / Module</label>
-        <input id="filterSearch" type="text" placeholder="Filter by action, actor hash, or module..." class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-mono focus:border-orange-500 focus:bg-white focus:outline-none touch-target" />
-      </div>
-
-      <div class="w-full md:w-56">
-        <label class="block text-xs font-extrabold uppercase tracking-wider text-navy-900 mb-1.5">Module</label>
-        <select id="filterModule" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:border-orange-500 focus:bg-white focus:outline-none touch-target">
-          <option value="">All Modules</option>
-        </select>
-      </div>
-
-      <div class="w-full md:w-44">
-        <label class="block text-xs font-extrabold uppercase tracking-wider text-navy-900 mb-1.5">Status</label>
-        <select id="filterStatus" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:border-orange-500 focus:bg-white focus:outline-none touch-target">
-          <option value="">All Statuses</option>
-          <option value="SUCCESS">SUCCESS</option>
-          <option value="ERROR">ERROR</option>
-          <option value="WARNING">WARNING</option>
-          <option value="INFO">INFO</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- Status Alert Toast -->
-    <div id="statusToast" class="hidden rounded-2xl p-4 text-xs font-mono flex items-center justify-between border shadow-md"></div>
-
-    <!-- Telemetry Table Card (White Body + Navy Header + Orange Actions) -->
-    <div class="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-sm">
-      <div class="px-5 py-4 bg-navy-900 text-white flex items-center justify-between gap-3">
-        <div>
-          <h2 class="font-extrabold text-sm sm:text-base text-white">Live Execution Telemetry Stream</h2>
-          <p class="text-xs text-slate-300">Native Web Crypto HMAC PII Redaction • Cloudflare D1 Storage</p>
-        </div>
-        <div id="recordCountBadge" class="text-xs font-mono bg-navy-800 text-orange-300 px-3 py-1 rounded-xl border border-navy-700 shrink-0 font-bold">
-          0 logs
-        </div>
-      </div>
-
-      <!-- Desktop Table -->
-      <div class="hidden sm:block overflow-x-auto">
-        <table class="w-full text-left border-collapse text-xs">
-          <thead>
-            <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-mono tracking-wider text-[11px]">
-              <th class="py-3.5 px-4 font-bold">Timestamp</th>
-              <th class="py-3.5 px-4 font-bold">Module</th>
-              <th class="py-3.5 px-4 font-bold">Action</th>
-              <th class="py-3.5 px-4 font-bold">Status</th>
-              <th class="py-3.5 px-4 font-bold">Actor Hash (HMAC)</th>
-              <th class="py-3.5 px-4 font-bold">IP Hash (HMAC)</th>
-              <th class="py-3.5 px-4 text-right font-bold">Payload</th>
-            </tr>
-          </thead>
-          <tbody id="logsTableBody" class="divide-y divide-slate-100 font-mono">
-            <tr>
-              <td colspan="7" class="py-12 text-center text-slate-400 font-sans">
-                No logs loaded. Click "Fetch Logs" or send a test log entry.
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Mobile Touch-Optimized Cards -->
-      <div id="mobileCardsContainer" class="sm:hidden divide-y divide-slate-100 px-4">
-        <div class="py-8 text-center text-slate-400 text-xs font-sans">
-          No logs loaded. Click "Fetch Logs" above.
-        </div>
-      </div>
-
-    </div>
-
-    <!-- Whop $5 SaaS Banner (Vibrant Orange & Navy Blue) -->
-    <div id="whopBanner" class="bg-gradient-to-r from-navy-950 via-navy-900 to-navy-950 text-white border border-navy-800 rounded-3xl p-6 sm:p-7 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 shadow-xl">
-      <div class="space-y-1.5">
-        <div class="flex items-center space-x-2">
-          <span class="inline-block w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse"></span>
-          <span class="text-xs font-extrabold uppercase tracking-wider text-orange-400">Micro-SaaS Access</span>
-        </div>
-        <h4 class="text-lg sm:text-xl font-extrabold text-white">Scale With Unlimited Sites for $5/month</h4>
-        <p class="text-xs text-slate-300 max-w-2xl leading-relaxed">
-          Powered by <strong>Whop.com</strong>. Provision unlimited connected sites, issue personal customer API keys, and track high-throughput edge telemetry with complete data-masking privacy guarantees.
-        </p>
-      </div>
-      <div class="flex items-center space-x-3 w-full md:w-auto">
-        <button onclick="openBillingModal()" class="w-full md:w-auto px-6 py-3.5 bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 hover:from-orange-500 hover:to-orange-400 text-white font-extrabold rounded-2xl text-xs transition touch-target shadow-lg shadow-orange-500/30 whitespace-nowrap">
-          Subscribe for $5 &rarr;
-        </button>
-      </div>
-    </div>
-
   </main>
 
-  <!-- ==================== SAFESPACES EXACT FOOTER ==================== -->
-  <footer class="border-t border-slate-200 bg-white text-slate-900 pt-16 pb-12 mt-12 shadow-inner">
-    <div class="max-w-7xl mx-auto px-6 sm:px-8">
-      
-      <!-- Top Grid: 5 Columns -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 pb-14 border-b border-slate-200">
-        
-        <!-- Brand & Description (Col 1-2) -->
-        <div class="lg:col-span-2 space-y-4 pr-0 lg:pr-6">
-          <div class="flex items-center gap-3">
-            <img src="/SafeSpacesLogo.png" alt="Safe Spaces AI Hub Logo" class="h-8 w-auto object-contain rounded" />
-            <span class="font-bold text-sm text-navy-950 tracking-tight">Safe Spaces AI Hub</span>
-          </div>
-          <p class="text-xs text-slate-600 font-normal leading-relaxed max-w-sm">
-            Safe Spaces AI Innovation Hub - SMC Limited. Advancing ethical artificial intelligence, edge software architecture, and high-impact digital products across East Africa.
-          </p>
-          <div class="pt-2">
-            <span class="text-[11px] font-mono text-slate-400">Chapter: Mbarara, Uganda (HQ)</span>
-          </div>
-          <div class="pt-1 space-y-1">
-            <p class="text-[11px] text-slate-500 leading-relaxed font-normal">
-              Amazon Building, 4th Floor • Hive Colab<br/>Mbarara High Street, Uganda
-            </p>
-            <a href="https://www.google.com/maps/place/Safe+Spaces+AI+Innovation+Hub/@-0.6082977,30.6579433,726m/data=!3m2!1e3!4b1!4m6!3m5!1s0x19d91b7bb03ce9e1:0xd3d62bafe2a618b0!8m2!3d-0.6083031!4d30.6605236!16s%2Fg%2F11nr8q6735?entry=ttu" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-orange-600 hover:text-orange-700 transition-colors pt-1">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-orange-500"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle cx="12" cy="10" r="3"></circle></svg>
-              <span>Google Maps Location</span>
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-slate-400"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>
-            </a>
-          </div>
-        </div>
-
-        <!-- Col 3: Products & Tools -->
-        <div class="space-y-3">
-          <h4 class="text-xs font-mono uppercase tracking-wider text-slate-500 font-bold">Products &amp; Tools</h4>
-          <div class="space-y-2 pt-1 text-xs font-medium text-slate-600">
-            <a href="https://cloudlogger.pages.dev" class="hover:text-orange-600 block transition">CloudLogger Edge SaaS</a>
-            <a href="https://safespaceshub.com" class="hover:text-orange-600 block transition">AI Hub Platform</a>
-            <a href="https://safespaceshub.com" class="hover:text-orange-600 block transition">Edge Privacy Engine</a>
-          </div>
-        </div>
-
-        <!-- Col 4: Services & Focus -->
-        <div class="space-y-3">
-          <h4 class="text-xs font-mono uppercase tracking-wider text-slate-500 font-bold">Services &amp; Focus</h4>
-          <div class="space-y-2 pt-1 text-xs font-medium text-slate-600">
-            <a href="https://safespaceshub.com" class="hover:text-orange-600 block transition">Ethical AI Architecture</a>
-            <a href="https://safespaceshub.com" class="hover:text-orange-600 block transition">Cloudflare Serverless Deployments</a>
-            <a href="https://safespaceshub.com" class="hover:text-orange-600 block transition">Data Privacy Compliance</a>
-          </div>
-        </div>
-
-        <!-- Col 5: Connect & Inquiries -->
-        <div class="space-y-3">
-          <h4 class="text-xs font-mono uppercase tracking-wider text-slate-500 font-bold">Connect &amp; Inquiries</h4>
-          <div class="space-y-1.5">
-            <a href="mailto:info@safespaceshub.com" class="text-xs text-slate-600 hover:text-orange-600 transition-colors block font-mono">info@safespaceshub.com</a>
-            <a href="tel:+256791219799" class="text-xs text-slate-600 hover:text-orange-600 transition-colors block font-mono">+256 791 219 799</a>
-            <a href="https://safespaceshub.com/reviews" target="_blank" rel="noopener noreferrer" class="text-xs text-orange-600 hover:underline font-bold block pt-1">Client Reviews &amp; Testimonials &rarr;</a>
-          </div>
-          <div class="pt-2 space-y-1.5">
-            <p class="text-[11px] font-mono text-slate-400 uppercase font-bold">Channels</p>
-            <div class="flex flex-wrap gap-3 text-xs text-slate-600 font-medium">
-              <a href="https://linkedin.com/company/safe-spacesug/" target="_blank" rel="noopener noreferrer" class="hover:text-navy-900 transition-colors">LinkedIn</a>
-              <a href="https://x.com/SafeSpacesAIHub" target="_blank" rel="noopener noreferrer" class="hover:text-navy-900 transition-colors">X / Twitter</a>
-              <a href="https://github.com/Safe-Spaces-AI" target="_blank" rel="noopener noreferrer" class="hover:text-navy-900 transition-colors">GitHub</a>
-            </div>
-          </div>
-        </div>
-
+  <!-- ========== SIGN IN DIALOG ========== -->
+  <dialog id="authDialog" aria-labelledby="authTitle">
+    <form class="dlg" id="authForm" method="dialog" novalidate>
+      <h2 id="authTitle" style="font-size:1.4rem">Welcome</h2>
+      <div class="tabs" role="tablist">
+        <button class="tab" type="button" role="tab" id="tabLogin" aria-selected="true">Log in</button>
+        <button class="tab" type="button" role="tab" id="tabSignup" aria-selected="false">Create an account</button>
       </div>
+      <label for="authEmail">Email</label>
+      <input id="authEmail" type="email" autocomplete="email" required />
+      <label for="authPassword">Password</label>
+      <input id="authPassword" type="password" autocomplete="current-password" minlength="8" required />
+      <p class="hint hidden" id="pwHint">At least 8 characters.</p>
+      <p class="msg msg-bad hidden" id="authError" role="alert"></p>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="authSubmit" type="submit">Log in</button>
+        <button class="btn btn-line" id="authCancel" type="button">Cancel</button>
+      </div>
+    </form>
+  </dialog>
 
-      <!-- Bottom Bar: Copyright & Policies -->
-      <div class="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-slate-500">
-        <p>&copy; 2026 Safe Spaces AI Innovation Hub - SMC Limited. All rights reserved.</p>
-        <div class="flex flex-wrap items-center gap-4">
-          <a href="https://safespaceshub.com/privacy" target="_blank" rel="noopener noreferrer" class="hover:text-navy-900 transition-colors">Privacy Policy</a>
-          <span>•</span>
-          <a href="https://safespaceshub.com/terms" target="_blank" rel="noopener noreferrer" class="hover:text-navy-900 transition-colors">Terms of Governance</a>
-          <span>•</span>
-          <a href="https://safespaceshub.com/cookies" target="_blank" rel="noopener noreferrer" class="hover:text-navy-900 transition-colors">Security Notice</a>
+  <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+
+  <!-- ========== FOOTER (content copied from safespaceshub.com) ========== -->
+  <footer class="site">
+    <div class="wrap">
+      <div class="fgrid">
+        <div>
+          <div class="fbrand">
+            <img src="/SafeSpacesLogo.png" alt="Safe Spaces AI Innovation Hub logo" width="36" height="36" />
+            <span>Safe Spaces AI Innovation Hub</span>
+          </div>
+          <p>Safe Spaces AI Innovation Hub - SMC Limited. Advancing ethical artificial intelligence, edge software architecture, and high-impact digital products across East Africa.</p>
+          <p class="fsmall">Chapter: Mbarara, Uganda (HQ)</p>
+          <p class="fsmall">Amazon Building, 4th Floor • Hive Colab<br />Mbarara High Street, Uganda</p>
+          <a class="fsmall" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/place/Safe+Spaces+AI+Innovation+Hub/@-0.6082977,30.6579433,726m/data=!3m2!1e3!4b1!4m6!3m5!1s0x19d91b7bb03ce9e1:0xd3d62bafe2a618b0!8m2!3d-0.6083031!4d30.6605236!16s%2Fg%2F11nr8q6735?entry=ttu">Google Maps Location ↗</a>
+        </div>
+
+        <div>
+          <h4>Products &amp; Tools</h4>
+          <ul>
+            <li><a target="_blank" rel="noopener noreferrer" href="https://mwago.safespaceshub.com/">Mwago - The Remote Mouse</a></li>
+            <li><a target="_blank" rel="noopener noreferrer" href="https://thesurveymat.com">SurveyMat</a></li>
+            <li><a target="_blank" rel="noopener noreferrer" href="https://frontriseug.org">Front Rise Health Uganda</a></li>
+            <li><a target="_blank" rel="noopener noreferrer" href="https://dreameventsug.com">Dream Events Ug</a></li>
+            <li><a target="_blank" rel="noopener noreferrer" href="https://thedokta.safespaceshub.com">The Dokta</a></li>
+            <li><a target="_blank" rel="noopener noreferrer" href="https://pharmasales-hub.web.app/">Pharmasales</a></li>
+            <li><a class="fsmall" href="https://safespaceshub.com/projects">View All Showcase →</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h4>Services &amp; Focus</h4>
+          <ul>
+            <li><a href="https://safespaceshub.com/services/health">Health technology</a></li>
+            <li><a href="https://safespaceshub.com/services/climate">Climate &amp; sustainability</a></li>
+            <li><a href="https://safespaceshub.com/services/faith">Faith communities</a></li>
+            <li><a href="https://safespaceshub.com/services/education">Education &amp; Learning Platforms</a></li>
+            <li><a href="https://safespaceshub.com/services/ai">AI Tools Development &amp; LLMs</a></li>
+            <li><a href="https://safespaceshub.com/services/custom">Custom Software &amp; Mobile Apps</a></li>
+            <li><a class="fsmall" href="https://safespaceshub.com/services">View All Services →</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h4>Connect &amp; Inquiries</h4>
+          <ul>
+            <li><a href="mailto:info@safespaceshub.com">info@safespaceshub.com</a></li>
+            <li><a href="tel:+256791219799">+256 791 219 799</a></li>
+            <li><a href="https://safespaceshub.com/reviews">Client Reviews &amp; Testimonials →</a></li>
+          </ul>
+          <p class="fsmall" style="margin:1rem 0 0;text-transform:uppercase">Channels</p>
+          <div class="channels">
+            <a target="_blank" rel="noopener noreferrer" href="https://linkedin.com/company/safe-spacesug/">LinkedIn</a>
+            <a target="_blank" rel="noopener noreferrer" href="https://x.com/SafeSpacesAIHub">X / Twitter</a>
+            <a target="_blank" rel="noopener noreferrer" href="https://github.com/Safe-Spaces-AI">GitHub</a>
+          </div>
         </div>
       </div>
 
+      <div class="fbottom">
+        <span>© 2026 Safe Spaces AI Innovation Hub - SMC Limited. All rights reserved.</span>
+        <nav aria-label="Legal">
+          <a href="https://safespaceshub.com/privacy">Privacy Policy</a><span>•</span>
+          <a href="https://safespaceshub.com/terms">Terms of Governance</a><span>•</span>
+          <a href="https://safespaceshub.com/cookies">Security Notice</a>
+        </nav>
+      </div>
     </div>
   </footer>
 
-  <!-- ==================== PLATFORM DOCUMENTATION MODAL ==================== -->
-  <div id="docsModal" class="hidden fixed inset-0 z-50 bg-navy-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
-    <div class="bg-white border border-slate-200 rounded-3xl w-full max-w-4xl p-6 shadow-2xl space-y-5 max-h-[92vh] overflow-y-auto">
-      <div class="flex items-center justify-between border-b border-slate-200 pb-4">
-        <div class="flex items-center space-x-3">
-          <img src="/SafeSpacesLogo.png" alt="Safe Spaces Logo" class="h-8 w-auto object-contain rounded" />
-          <div>
-            <h3 class="font-extrabold text-lg text-navy-950">CloudLogger Platform Documentation</h3>
-            <p class="text-xs text-orange-600 font-semibold">Serverless Log-As-A-Service Micro-SaaS Engine</p>
-          </div>
-        </div>
-        <button id="closeDocsBtn" class="text-slate-400 hover:text-navy-900 touch-target p-2">
-          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      <!-- Docs Navigation Tabs -->
-      <div class="flex space-x-1 border-b border-slate-200 overflow-x-auto pb-2 text-xs">
-        <button onclick="switchDocTab('arch')" id="docTab-arch" class="px-3.5 py-2 font-bold rounded-xl bg-navy-900 text-white shrink-0">1. Architecture</button>
-        <button onclick="switchDocTab('privacy')" id="docTab-privacy" class="px-3.5 py-2 font-bold rounded-xl text-slate-600 hover:text-navy-900 shrink-0">2. Privacy Engine</button>
-        <button onclick="switchDocTab('api')" id="docTab-api" class="px-3.5 py-2 font-bold rounded-xl text-slate-600 hover:text-navy-900 shrink-0">3. REST API Reference</button>
-        <button onclick="switchDocTab('sdks')" id="docTab-sdks" class="px-3.5 py-2 font-bold rounded-xl text-slate-600 hover:text-navy-900 shrink-0">4. Code Integration</button>
-        <button onclick="switchDocTab('billing')" id="docTab-billing" class="px-3.5 py-2 font-bold rounded-xl text-slate-600 hover:text-navy-900 shrink-0">5. Whop $5 Billing</button>
-        <button onclick="switchDocTab('embed')" id="docTab-embed" class="px-3.5 py-2 font-bold rounded-xl text-slate-600 hover:text-navy-900 shrink-0">6. Iframe Frame Widget</button>
-      </div>
-
-      <!-- Docs Content Panes -->
-      <div id="docsContent" class="space-y-4 text-xs text-slate-700 leading-relaxed">
-        
-        <div id="docPane-arch" class="space-y-3">
-          <h4 class="text-sm font-bold text-navy-950">Cloudflare Edge Serverless Architecture</h4>
-          <p>
-            CloudLogger runs 100% within the Cloudflare serverless ecosystem without traditional servers, Docker containers, or VPC management:
-          </p>
-          <ul class="list-disc pl-5 space-y-1.5 text-slate-600">
-            <li><strong class="text-navy-950">Cloudflare Workers:</strong> Executes edge API routing, schema validation, CORS negotiation, and cryptographic Web Crypto HMAC hashing at under 10ms execution times.</li>
-            <li><strong class="text-navy-950">Cloudflare D1 SQLite Database:</strong> Provides indexed, ACID-compliant persistence for multi-tenant accounts, connected sites, and high-volume system telemetry.</li>
-            <li><strong class="text-navy-950">Cloudflare Pages:</strong> Serves the responsive analytics dashboard directly from Cloudflare's global CDN.</li>
-          </ul>
-        </div>
-
-        <div id="docPane-privacy" class="hidden space-y-3">
-          <h4 class="text-sm font-bold text-navy-950">Cryptographic Edge Privacy & PII Redaction</h4>
-          <p>
-            Regulatory frameworks (GDPR, CCPA, HIPAA) prohibit storing raw customer emails and IP addresses in plaintext. CloudLogger intercepts all incoming payloads at the edge:
-          </p>
-          <div class="p-3.5 bg-slate-900 rounded-xl font-mono text-xs text-orange-400">
-            HMAC_SHA256(body.actor, env.HASHING_SECRET) &rarr; actor_hash<br/>
-            HMAC_SHA256(body.metadata.ip_address, env.HASHING_SECRET) &rarr; ip_hash
-          </div>
-          <p>
-            The raw plaintext values of <code>actor</code> and <code>ip_address</code> are completely stripped out before database insertion. Only deterministic, salted cryptographic hashes are saved to D1.
-          </p>
-        </div>
-
-        <div id="docPane-api" class="hidden space-y-3">
-          <h4 class="text-sm font-bold text-navy-950">Core REST API Endpoints</h4>
-          <div class="space-y-2">
-            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <span class="px-2 py-0.5 rounded bg-orange-100 text-orange-700 font-bold font-mono">POST /v1/auth/register</span>
-              <p class="text-slate-600 mt-1">Registers a new account. Body: <code>{ email, password, site_name }</code>. Returns personal API key <code>cl_live_...</code> and default site.</p>
-            </div>
-            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <span class="px-2 py-0.5 rounded bg-orange-100 text-orange-700 font-bold font-mono">POST /v1/auth/login</span>
-              <p class="text-slate-600 mt-1">Authenticates email & password. Returns active session token and all connected sites.</p>
-            </div>
-            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold font-mono">POST /v1/logs</span>
-              <p class="text-slate-600 mt-1">Ingests telemetry events. Requires <code>Authorization: Bearer &lt;API_KEY&gt;</code>. Body must contain <code>project_id</code>, <code>module_name</code>, <code>action</code>, <code>status</code>.</p>
-            </div>
-            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <span class="px-2 py-0.5 rounded bg-blue-100 text-blue-700 font-bold font-mono">GET /v1/logs?project_id=:id</span>
-              <p class="text-slate-600 mt-1">Retrieves latest 200 telemetry events for a specific connected site.</p>
-            </div>
-            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <span class="px-2 py-0.5 rounded bg-purple-100 text-purple-700 font-bold font-mono">POST /v1/webhooks/whop</span>
-              <p class="text-slate-600 mt-1">Automated Whop payment lifecycle webhook receiver (<code>payment.succeeded</code>, <code>membership.went_valid</code>).</p>
-            </div>
-          </div>
-        </div>
-
-        <div id="docPane-sdks" class="hidden space-y-3">
-          <h4 class="text-sm font-bold text-navy-950">Multi-Language Code Integration</h4>
-          <p>Copy-paste ready telemetry instrumentation for external backends:</p>
-          <pre class="p-3.5 bg-slate-900 rounded-xl font-mono text-[11px] text-orange-300 overflow-x-auto">
-// Node.js (Fetch API)
-await fetch("https://serverless-logger-api.joronimoamanya.workers.dev/v1/logs", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "Authorization": "Bearer cl_live_YOUR_API_KEY"
-  },
-  body: JSON.stringify({
-    project_id: "your-project-id",
-    module_name: "billing_engine",
-    action: "subscription_renewed",
-    actor: "customer_id_490",
-    status: "SUCCESS",
-    payload: { amount: 5.0, currency: "USD" },
-    metadata: { ip_address: req.ip }
-  })
-});</pre>
-        </div>
-
-        <div id="docPane-billing" class="hidden space-y-3">
-          <h4 class="text-sm font-bold text-navy-950">Whop.com $5/Month SaaS Subscription</h4>
-          <p>
-            CloudLogger utilizes <strong>Whop.com</strong> as its official payment and subscription engine. For $5/month, customers unlock:
-          </p>
-          <ul class="list-disc pl-5 space-y-1 text-slate-600">
-            <li>Unlimited user accounts and live personal API keys.</li>
-            <li>Unlimited connected sites and microservices.</li>
-            <li>High-throughput edge ingestion with zero PII retention.</li>
-            <li>Instant automated webhook synchronization upon checkout.</li>
-          </ul>
-        </div>
-
-        <div id="docPane-embed" class="hidden space-y-3">
-          <h4 class="text-sm font-bold text-navy-950">Embedding Real-Time Telemetry Inside Customer Dashboards</h4>
-          <p>
-            You can embed CloudLogger directly into your own SaaS application or internal admin dashboard with a single iframe line:
-          </p>
-          <pre class="p-3.5 bg-slate-900 rounded-xl font-mono text-[11px] text-orange-300 overflow-x-auto">
-&lt;iframe 
-  src="https://cloudlogger.pages.dev/?embed=true&project_id=YOUR_PROJECT_ID&token=YOUR_API_KEY" 
-  width="100%" 
-  height="600" 
-  frameborder="0"
-  style="border-radius: 12px; border: 1px solid #cbd5e1;"&gt;
-&lt;/iframe&gt;</pre>
-        </div>
-
-      </div>
-    </div>
-  </div>
-
-  <!-- ==================== WHOP $5 BILLING MODAL ==================== -->
-  <div id="billingModal" class="hidden fixed inset-0 z-50 bg-navy-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
-    <div class="bg-white border border-slate-200 rounded-3xl w-full max-w-lg p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
-      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-        <div>
-          <h3 class="font-extrabold text-lg text-navy-950">CloudLogger Pro SaaS Tier</h3>
-          <p class="text-xs text-orange-600 font-bold">$5 / month via Whop.com</p>
-        </div>
-        <button id="closeBillingBtn" class="text-slate-400 hover:text-navy-900 touch-target p-1">
-          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      <!-- Whop Plan Card -->
-      <div class="p-5 bg-navy-900 text-white rounded-2xl border border-navy-800 space-y-3 shadow-md">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-bold uppercase tracking-wider text-orange-400">All-Inclusive Micro-SaaS</span>
-          <span class="px-2.5 py-1 rounded-full bg-orange-500 text-white font-extrabold text-xs">$5 / mo</span>
-        </div>
-        <h4 class="text-xl font-extrabold text-white">Unlimited Connected Sites & Telemetry</h4>
-        <ul class="text-xs text-slate-300 space-y-2">
-          <li class="flex items-center space-x-2">
-            <span class="text-orange-400 font-bold">&#10003;</span>
-            <span>Create multiple user accounts & personal <code>cl_live_...</code> API keys</span>
-          </li>
-          <li class="flex items-center space-x-2">
-            <span class="text-orange-400 font-bold">&#10003;</span>
-            <span>Connect unlimited sites, apps & microservices</span>
-          </li>
-          <li class="flex items-center space-x-2">
-            <span class="text-orange-400 font-bold">&#10003;</span>
-            <span>High-throughput edge ingestion backed by Cloudflare D1</span>
-          </li>
-          <li class="flex items-center space-x-2">
-            <span class="text-orange-400 font-bold">&#10003;</span>
-            <span>Automated Web Crypto HMAC PII redaction</span>
-          </li>
-        </ul>
-        <div class="pt-2">
-          <a id="whopCheckoutLink" href="https://whop.com/safespaceshub/cloudlogger" target="_blank" rel="noopener noreferrer" class="block w-full text-center py-3.5 bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 hover:from-orange-500 hover:to-orange-400 text-white font-extrabold rounded-xl text-xs transition touch-target shadow-lg shadow-orange-500/30">
-            Subscribe Now on Whop.com ($5/mo) &rarr;
-          </a>
-        </div>
-      </div>
-
-      <!-- Redeem License Key Form -->
-      <form id="activateLicenseForm" class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 text-xs">
-        <h4 class="font-bold text-navy-950">Already Subscribed on Whop? Redeem License</h4>
-        <div>
-          <label class="block text-slate-600 font-medium mb-1">Whop License Key / Customer Email</label>
-          <input id="whopLicenseInput" type="text" required placeholder="whop_mem_..." class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-navy-950 focus:border-orange-500 focus:outline-none touch-target" />
-        </div>
-        <button type="submit" class="w-full py-2.5 bg-navy-900 hover:bg-navy-800 text-white font-bold rounded-xl text-xs transition touch-target">
-          Activate $5 Pro Access
-        </button>
-      </form>
-    </div>
-  </div>
-
-  <!-- Account Modal (Register / Login / Profile) -->
-  <div id="accountModal" class="hidden fixed inset-0 z-50 bg-navy-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
-    <div class="bg-white border border-slate-200 rounded-3xl w-full max-w-md p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-        <h3 id="accountModalTitle" class="font-bold text-base text-navy-950">Account Access</h3>
-        <button id="closeAccountBtn" class="text-slate-400 hover:text-navy-900 touch-target p-1">
-          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      <!-- Logged In State View -->
-      <div id="accountLoggedInView" class="hidden space-y-4">
-        <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-          <div class="text-xs text-slate-500">Signed in as:</div>
-          <div id="userEmailDisplay" class="text-sm font-bold text-navy-900 font-mono">user@example.com</div>
-          <div class="text-[11px] text-slate-500 pt-1">Your Personal API Key:</div>
-          <div class="flex items-center space-x-2">
-            <input id="userApiKeyDisplay" type="text" readonly class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-navy-900 font-mono" />
-            <button id="copyApiKeyBtn" class="px-3 py-2 bg-navy-900 hover:bg-navy-800 text-white rounded-xl text-xs font-bold shrink-0">Copy</button>
-          </div>
-        </div>
-        <button id="signOutBtn" class="w-full py-3 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold rounded-xl text-xs transition touch-target">
-          Sign Out of Account
-        </button>
-      </div>
-
-      <!-- Auth Tabs (Register / Login) -->
-      <div id="authTabsContainer" class="space-y-4">
-        <div class="flex rounded-xl bg-slate-100 p-1 border border-slate-200">
-          <button id="tabRegisterBtn" class="flex-1 py-2 text-xs font-bold rounded-lg bg-orange-500 text-white transition">Create Account</button>
-          <button id="tabLoginBtn" class="flex-1 py-2 text-xs font-bold rounded-lg text-slate-600 hover:text-navy-900 transition">Sign In</button>
-        </div>
-
-        <!-- Register Form -->
-        <form id="registerForm" class="space-y-3 text-xs">
-          <div>
-            <label class="block font-medium text-slate-700 mb-1">Work Email</label>
-            <input id="regEmail" type="email" required placeholder="you@company.com" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-navy-900 focus:border-orange-500 focus:bg-white focus:outline-none touch-target" />
-          </div>
-          <div>
-            <label class="block font-medium text-slate-700 mb-1">Password (min. 6 characters)</label>
-            <input id="regPassword" type="password" required minlength="6" placeholder="••••••••••••" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-navy-900 focus:border-orange-500 focus:bg-white focus:outline-none touch-target" />
-          </div>
-          <div>
-            <label class="block font-medium text-slate-700 mb-1">First Connected Site Name</label>
-            <input id="regSiteName" type="text" placeholder="Production Web App" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-navy-900 focus:border-orange-500 focus:bg-white focus:outline-none touch-target" />
-          </div>
-          <div>
-            <label class="block font-medium text-slate-700 mb-1">Site Domain (optional)</label>
-            <input id="regDomain" type="text" placeholder="app.company.com" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-navy-900 focus:border-orange-500 focus:bg-white focus:outline-none touch-target" />
-          </div>
-          <button type="submit" class="w-full py-3.5 bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 hover:from-orange-500 hover:to-orange-400 text-white font-extrabold rounded-xl text-xs transition touch-target shadow-lg shadow-orange-500/20">
-            Create Account & Activate ($5/mo)
-          </button>
-        </form>
-
-        <!-- Login Form -->
-        <form id="loginForm" class="hidden space-y-3 text-xs">
-          <div>
-            <label class="block font-medium text-slate-700 mb-1">Account Email</label>
-            <input id="loginEmail" type="email" required placeholder="you@company.com" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-navy-900 focus:border-orange-500 focus:bg-white focus:outline-none touch-target" />
-          </div>
-          <div>
-            <label class="block font-medium text-slate-700 mb-1">Password</label>
-            <input id="loginPassword" type="password" required placeholder="••••••••••••" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-navy-900 focus:border-orange-500 focus:bg-white focus:outline-none touch-target" />
-          </div>
-          <button type="submit" class="w-full py-3.5 bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 hover:from-orange-500 hover:to-orange-400 text-white font-extrabold rounded-xl text-xs transition touch-target shadow-lg shadow-orange-500/20">
-            Sign In to Connected Sites
-          </button>
-        </form>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- Connected Sites Manager Modal -->
-  <div id="sitesModal" class="hidden fixed inset-0 z-50 bg-navy-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
-    <div class="bg-white border border-slate-200 rounded-3xl w-full max-w-xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-        <div>
-          <h3 class="font-bold text-base text-navy-950">Connected Sites Management</h3>
-          <p class="text-xs text-orange-600 font-bold">All environments transmitting telemetry</p>
-        </div>
-        <button id="closeSitesBtn" class="text-slate-400 hover:text-navy-900 touch-target p-1">
-          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      <!-- Add New Site Form -->
-      <form id="addSiteForm" class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 text-xs">
-        <h4 class="font-bold text-navy-950">+ Connect New Site or Microservice</h4>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label class="block font-medium text-slate-700 mb-1">Site / Service Name</label>
-            <input id="newSiteName" type="text" required placeholder="e.g. Stripe Webhook Service" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-navy-950 focus:outline-none focus:border-orange-500 touch-target" />
-          </div>
-          <div>
-            <label class="block font-medium text-slate-700 mb-1">Domain or Host (optional)</label>
-            <input id="newSiteDomain" type="text" placeholder="e.g. api.store.com" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-navy-950 focus:outline-none focus:border-orange-500 touch-target" />
-          </div>
-        </div>
-        <button type="submit" class="px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-xs transition touch-target shadow-md shadow-orange-500/20">
-          Save & Generate Project ID
-        </button>
-      </form>
-
-      <!-- Sites List -->
-      <div class="space-y-2">
-        <h4 class="text-xs font-bold uppercase tracking-wider text-navy-900">Your Connected Sites:</h4>
-        <div id="sitesListContainer" class="space-y-2 max-h-60 overflow-y-auto">
-          <!-- Rendered dynamically -->
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Integration Snippets Modal -->
-  <div id="snippetModal" class="hidden fixed inset-0 z-50 bg-navy-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
-    <div class="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-        <div>
-          <h3 class="font-bold text-base text-navy-950">Connect Your Application</h3>
-          <p class="text-xs text-orange-600 font-bold">Copy-paste integration code with your pre-filled project ID</p>
-        </div>
-        <button id="closeSnippetBtn" class="text-slate-400 hover:text-navy-900 touch-target p-1">
-          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      <div class="space-y-3">
-        <div class="flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs">
-          <button id="tabCurlBtn" class="flex-1 py-1.5 font-bold rounded-lg bg-orange-500 text-white">cURL</button>
-          <button id="tabNodeBtn" class="flex-1 py-1.5 font-bold rounded-lg text-slate-600 hover:text-navy-900">Node.js</button>
-          <button id="tabPythonBtn" class="flex-1 py-1.5 font-bold rounded-lg text-slate-600 hover:text-navy-900">Python</button>
-        </div>
-        <pre id="snippetCodeBlock" class="p-4 bg-slate-900 rounded-2xl text-xs font-mono text-orange-300 overflow-x-auto max-h-72"></pre>
-      </div>
-    </div>
-  </div>
-
-  <!-- Manual Connection Settings Modal -->
-  <div id="configModal" class="hidden fixed inset-0 z-50 bg-navy-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
-    <div class="bg-white border border-slate-200 rounded-3xl w-full max-w-lg p-5 sm:p-6 shadow-2xl space-y-4">
-      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-        <h3 class="font-bold text-base text-navy-950">Manual Edge Configuration</h3>
-        <button id="closeConfigBtn" class="text-slate-400 hover:text-navy-900 touch-target p-1">
-          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-      <div class="space-y-3 text-xs">
-        <div>
-          <label class="block font-medium text-slate-700 mb-1">Worker API Base URL</label>
-          <input id="apiUrlInput" type="text" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-navy-950 font-mono focus:border-orange-500 focus:outline-none touch-target" placeholder="https://serverless-logger-api.joronimoamanya.workers.dev" />
-        </div>
-        <div>
-          <label class="block font-medium text-slate-700 mb-1">Bearer API Token</label>
-          <input id="apiTokenInput" type="password" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-navy-950 font-mono focus:border-orange-500 focus:outline-none touch-target" placeholder="cl_live_..." />
-        </div>
-        <div>
-          <label class="block font-medium text-slate-700 mb-1">Active Project ID</label>
-          <input id="projectIdInput" type="text" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-navy-950 font-mono focus:border-orange-500 focus:outline-none touch-target" placeholder="saas-platform-one" />
-        </div>
-      </div>
-      <div class="pt-2 flex justify-end">
-        <button id="saveConfigBtn" class="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-xs transition touch-target shadow-md shadow-orange-500/20">
-          Save Settings
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Payload Modal -->
-  <div id="payloadModal" class="hidden fixed inset-0 z-50 bg-navy-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
-    <div class="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-        <h3 id="payloadModalTitle" class="font-bold text-sm text-navy-950 font-mono">Payload Data</h3>
-        <button id="closePayloadBtn" class="text-slate-400 hover:text-navy-900 touch-target p-1">
-          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-      <pre id="payloadModalContent" class="bg-slate-900 p-4 rounded-2xl text-xs font-mono text-orange-300 overflow-auto max-h-96"></pre>
-    </div>
-  </div>
-
-  <!-- ==================== FRONTEND CONTROLLER SCRIPT ==================== -->
   <script>
-    // 1. Initial State & Configuration
-    const urlParams = new URLSearchParams(window.location.search);
-    const isEmbed = urlParams.get('embed') === 'true' || window.self !== window.top;
+    (function () {
+      'use strict';
+      var API = 'https://serverless-logger-api.joronimoamanya.workers.dev';
+      var $ = function (id) { return document.getElementById(id); };
+      var state = {
+        token: localStorage.getItem('cl_token'),
+        email: localStorage.getItem('cl_email'),
+        demo: false, sites: [], activeSite: null, authMode: 'login'
+      };
 
-    const state = {
-      apiUrl: urlParams.get('api') || localStorage.getItem('cloudlogger_api_url') || 'https://serverless-logger-api.joronimoamanya.workers.dev',
-      apiToken: urlParams.get('token') || localStorage.getItem('cloudlogger_api_token') || 'dev-token-secret-12345',
-      projectId: urlParams.get('project_id') || localStorage.getItem('cloudlogger_project_id') || 'saas-platform-one',
-      currentUser: JSON.parse(localStorage.getItem('cloudlogger_user') || 'null'),
-      connectedSites: JSON.parse(localStorage.getItem('cloudlogger_sites') || '[]'),
-      logs: [],
-      activeSnippetTab: 'curl'
-    };
-
-    // If iframe embed mode is active, adjust UI
-    if (isEmbed) {
-      const header = document.getElementById('mainHeader');
-      if (header) header.classList.add('hidden');
-      const banner = document.getElementById('whopBanner');
-      if (banner) banner.classList.add('hidden');
-      const footer = document.querySelector('footer');
-      if (footer) footer.classList.add('hidden');
-      document.body.classList.add('p-1');
-    }
-
-    // Elements
-    const activeSiteSelect = document.getElementById('activeSiteSelect');
-    const sitesCountPill = document.getElementById('sitesCountPill');
-    const logsTableBody = document.getElementById('logsTableBody');
-    const mobileCardsContainer = document.getElementById('mobileCardsContainer');
-    const recordCountBadge = document.getElementById('recordCountBadge');
-    const statTotalLogs = document.getElementById('statTotalLogs');
-    const statActiveModules = document.getElementById('statActiveModules');
-    const statSuccessRate = document.getElementById('statSuccessRate');
-    const statusToast = document.getElementById('statusToast');
-    const refreshSpinner = document.getElementById('refreshSpinner');
-
-    // UI Helpers
-    function showToast(msg, type = 'error') {
-      statusToast.className = type === 'error'
-        ? 'rounded-2xl p-4 text-xs font-mono flex items-center justify-between border bg-red-50 border-red-200 text-red-700'
-        : 'rounded-2xl p-4 text-xs font-mono flex items-center justify-between border bg-orange-50 border-orange-200 text-orange-800';
-      statusToast.innerHTML = `<span>${msg}</span><button class="p-1 touch-target text-slate-400 hover:text-navy-950" onclick="this.parentElement.classList.add('hidden')">&times;</button>`;
-      statusToast.classList.remove('hidden');
-      setTimeout(() => statusToast.classList.add('hidden'), 5000);
-    }
-
-    function syncAccountUI() {
-      const email = state.currentUser?.email;
-      const label = email ? email : 'Sign In / Register';
-      document.getElementById('accountBtnLabel').textContent = label;
-      document.getElementById('mobileAccountBtnLabel').textContent = label;
-
-      if (state.currentUser) {
-        document.getElementById('accountLoggedInView').classList.remove('hidden');
-        document.getElementById('authTabsContainer').classList.add('hidden');
-        document.getElementById('userEmailDisplay').textContent = state.currentUser.email;
-        document.getElementById('userApiKeyDisplay').value = state.currentUser.api_key;
-      } else {
-        document.getElementById('accountLoggedInView').classList.add('hidden');
-        document.getElementById('authTabsContainer').classList.remove('hidden');
+      // ---- Example content, shown only in the demo ----
+      var DEMO_SITES = [
+        { id: 'demo-1', name: 'Example Shop', domain: 'exampleshop.com', verified: true, project_id: 'demo-1' },
+        { id: 'demo-2', name: 'Example Blog', domain: 'exampleblog.com', verified: false, project_id: 'demo-2', verify_token: 'example-code-only' }
+      ];
+      function demoActivity() {
+        var now = Date.now(), m = 60000;
+        return [
+          { at: now - 2 * m, area: 'Checkout', what: 'Order placed', result: 'Success' },
+          { at: now - 9 * m, area: 'Sign up', what: 'New account created', result: 'Success' },
+          { at: now - 21 * m, area: 'Checkout', what: 'Payment declined', result: 'Failed' },
+          { at: now - 55 * m, area: 'Sign in', what: 'Visitor signed in', result: 'Success' },
+          { at: now - 130 * m, area: 'Contact form', what: 'Message sent', result: 'Success' }
+        ];
       }
 
-      sitesCountPill.textContent = state.connectedSites.length;
-      updateSiteSelectDropdown();
-    }
-
-    function updateSiteSelectDropdown() {
-      let options = '';
-      if (state.connectedSites.length > 0) {
-        options = state.connectedSites.map(s => `
-          <option value="${s.project_id}" ${s.project_id === state.projectId ? 'selected' : ''}>
-            ${s.name} (${s.project_id})
-          </option>
-        `).join('');
-      } else {
-        options = `<option value="${state.projectId}">${state.projectId}</option>`;
-      }
-      activeSiteSelect.innerHTML = options;
-    }
-
-    function renderSitesList() {
-      const container = document.getElementById('sitesListContainer');
-      if (state.connectedSites.length === 0) {
-        container.innerHTML = '<div class="text-xs text-slate-400 py-3">No connected sites yet. Create your first one above!</div>';
-        return;
-      }
-      container.innerHTML = state.connectedSites.map(site => `
-        <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
-          <div>
-            <div class="font-bold text-navy-950 text-xs">${site.name}</div>
-            <div class="text-[11px] font-mono text-orange-600">${site.project_id}</div>
-            ${site.domain ? `<div class="text-[10px] text-slate-500">${site.domain}</div>` : ''}
-          </div>
-          <div class="flex items-center space-x-1.5">
-            <button onclick="selectSiteAndFetch('${site.project_id}')" class="px-2.5 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-200">View Logs</button>
-            <button onclick="openSnippetModal('${site.project_id}')" class="px-2.5 py-1.5 bg-navy-900 text-white rounded-lg text-xs hover:bg-navy-800">Code</button>
-          </div>
-        </div>
-      `).join('');
-    }
-
-    window.selectSiteAndFetch = function(projId) {
-      state.projectId = projId;
-      localStorage.setItem('cloudlogger_project_id', projId);
-      updateSiteSelectDropdown();
-      document.getElementById('sitesModal').classList.add('hidden');
-      fetchLogs();
-    };
-
-    // 2. Fetch Ingested Logs from Worker
-    async function fetchLogs() {
-      if (refreshSpinner) refreshSpinner.classList.add('animate-spin');
-      
-      logsTableBody.innerHTML = `
-        <tr><td colspan="7" class="py-8"><div class="skeleton-box h-8 rounded-lg mb-2"></div><div class="skeleton-box h-8 rounded-lg mb-2"></div><div class="skeleton-box h-8 rounded-lg"></div></td></tr>
-      `;
-      mobileCardsContainer.innerHTML = `
-        <div class="skeleton-box h-20 rounded-xl my-2"></div>
-        <div class="skeleton-box h-20 rounded-xl my-2"></div>
-      `;
-
-      try {
-        const url = `${state.apiUrl.replace(/\/+$/, '')}/v1/logs?project_id=${encodeURIComponent(state.projectId)}`;
-        const res = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${state.apiToken}`
-          }
+      // ---- Small helpers (all page text is set with textContent, never as HTML) ----
+      function el(tag, props, kids) {
+        var node = document.createElement(tag);
+        Object.keys(props || {}).forEach(function (k) {
+          if (k === 'class') node.className = props[k];
+          else if (k === 'text') node.textContent = props[k];
+          else node.setAttribute(k, props[k]);
         });
+        [].concat(kids || []).forEach(function (c) { if (c) node.appendChild(c); });
+        return node;
+      }
+      var toastTimer;
+      function toast(text) {
+        var t = $('toast'); t.textContent = text; t.classList.remove('hidden');
+        clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.add('hidden'); }, 3500);
+      }
+      function copyText(text) {
+        var done = function () { toast('Copied'); };
+        if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done, function () { toast('Please copy it by hand'); }); return; }
+        var ta = el('textarea', { 'aria-hidden': 'true' }); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) { toast('Please copy it by hand'); }
+        document.body.removeChild(ta);
+      }
+      function whenText(value) {
+        var d = typeof value === 'number' ? new Date(value) : new Date(String(value).replace(' ', 'T') + 'Z');
+        return isNaN(d) ? '' : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+      }
 
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || `HTTP ${res.status}`);
+      async function request(path, opts) {
+        opts = opts || {};
+        var headers = { 'Content-Type': 'application/json' };
+        if (opts.auth !== false && state.token) headers.Authorization = 'Bearer ' + state.token;
+        var res;
+        try {
+          res = await fetch(API + path, { method: opts.method || 'GET', headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+        } catch (e) {
+          throw new Error('We cannot reach CloudLogger right now. Please check your connection and try again.');
         }
-
-        state.logs = await res.json();
-        updateFilterDropdowns();
-        renderLogsView();
-      } catch (err) {
-        showToast(`Telemetry fetch error: ${err.message}`, 'error');
-        logsTableBody.innerHTML = `
-          <tr><td colspan="7" class="py-10 text-center text-orange-600 font-sans">
-            Unable to connect to edge worker at <code>${state.apiUrl}</code>.<br/>
-            Check connection settings or verify the API token.
-          </td></tr>
-        `;
-        mobileCardsContainer.innerHTML = `
-          <div class="p-4 bg-orange-50 border border-orange-200 text-orange-700 rounded-2xl text-xs text-center my-3">
-            Connection error: ${err.message}
-          </div>
-        `;
-      } finally {
-        if (refreshSpinner) refreshSpinner.classList.remove('animate-spin');
+        var data = null;
+        try { data = await res.json(); } catch (e) { /* empty body */ }
+        if (res.status === 401 && opts.auth !== false) { signOut(); throw new Error('Please log in again.'); }
+        if (!res.ok) throw new Error((data && data.error) || 'Something went wrong. Please try again.');
+        return data;
       }
-    }
 
-    function updateFilterDropdowns() {
-      const filterModule = document.getElementById('filterModule');
-      const current = filterModule.value;
-      const modules = Array.from(new Set(state.logs.map(l => l.module_name))).filter(Boolean);
-      filterModule.innerHTML = '<option value="">All Modules</option>' + 
-        modules.map(m => `<option value="${m}" ${m === current ? 'selected' : ''}>${m}</option>`).join('');
-    }
+      // ---- Screens ----
+      function showScreen() {
+        var inApp = state.demo || !!state.token;
+        $('landing').classList.toggle('hidden', inApp);
+        $('app').classList.toggle('hidden', !inApp);
+        $('actionsOut').classList.toggle('hidden', !!state.token);
+        $('actionsIn').classList.toggle('hidden', !state.token && !state.demo);
+        $('whoLabel').textContent = state.token ? state.email : 'Demo';
+        $('logoutBtn').textContent = state.demo ? 'Leave demo' : 'Log out';
+        $('demoBanner').classList.toggle('hidden', !state.demo);
+        if (state.demo) $('actionsOut').classList.add('hidden');
+        window.scrollTo(0, 0);
+      }
+      function signOut() {
+        localStorage.removeItem('cl_token'); localStorage.removeItem('cl_email');
+        state.token = null; state.email = null; state.demo = false; state.sites = []; state.activeSite = null;
+        $('activityCard').classList.add('hidden');
+        showScreen();
+      }
+      function enterDemo() {
+        state.demo = true; state.sites = DEMO_SITES; state.activeSite = null;
+        showScreen(); renderSites(); $('activityCard').classList.add('hidden');
+      }
 
-    function renderLogsView() {
-      const search = document.getElementById('filterSearch').value.trim().toLowerCase();
-      const modFilter = document.getElementById('filterModule').value;
-      const statFilter = document.getElementById('filterStatus').value;
+      // ---- Sites ----
+      async function loadSites() {
+        $('sitesList').replaceChildren(el('p', { class: 'empty', text: 'Loading your websites…' }));
+        try {
+          var data = await request('/v1/sites');
+          state.sites = data.sites || [];
+          renderSites();
+        } catch (e) { $('sitesList').replaceChildren(el('p', { class: 'msg msg-bad', text: e.message })); }
+      }
 
-      const filtered = state.logs.filter(log => {
-        if (modFilter && log.module_name !== modFilter) return false;
-        if (statFilter && log.status !== statFilter) return false;
-        if (search) {
-          const hay = `${log.action} ${log.actor_hash || ''} ${log.ip_hash || ''} ${log.module_name}`.toLowerCase();
-          if (!hay.includes(search)) return false;
+      function renderSites() {
+        var list = $('sitesList');
+        if (!state.sites.length) {
+          list.replaceChildren(el('div', { class: 'card' }, [el('p', { class: 'empty', text: 'You have not added a website yet. Choose “Add a website” to begin.' })]));
+          return;
         }
-        return true;
-      });
-
-      // Update KPI metrics
-      statTotalLogs.textContent = state.logs.length;
-      const uniqueMods = new Set(state.logs.map(l => l.module_name));
-      statActiveModules.textContent = uniqueMods.size;
-      const successes = state.logs.filter(l => l.status === 'SUCCESS').length;
-      statSuccessRate.textContent = state.logs.length > 0 ? `${Math.round((successes / state.logs.length) * 100)}%` : '100%';
-      recordCountBadge.textContent = `${filtered.length} of ${state.logs.length} logs`;
-
-      if (filtered.length === 0) {
-        const emptyMsg = '<div class="py-10 text-center text-slate-400 text-xs">No telemetry events match your criteria.</div>';
-        logsTableBody.innerHTML = `<tr><td colspan="7" class="py-10 text-center text-slate-400">${emptyMsg}</td></tr>`;
-        mobileCardsContainer.innerHTML = emptyMsg;
-        return;
+        list.replaceChildren.apply(list, state.sites.map(siteCard));
       }
 
-      // Render Desktop Table
-      logsTableBody.innerHTML = filtered.map(log => {
-        const badge = log.status === 'SUCCESS' 
-          ? '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">SUCCESS</span>'
-          : log.status === 'ERROR'
-          ? '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">ERROR</span>'
-          : `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">${log.status}</span>`;
+      function siteCard(site) {
+        var badge = el('span', { class: 'badge ' + (site.verified ? 'badge-ok' : 'badge-wait'), text: site.verified ? 'Verified' : 'Waiting for verification' });
+        var card = el('article', { class: 'card' }, [
+          el('div', { class: 'site-head' }, [
+            el('div', {}, [el('h3', { text: site.name }), el('div', { class: 'domain', text: site.domain })]),
+            badge
+          ])
+        ]);
+        var msg = el('p', { class: 'msg hidden', role: 'status' });
 
-        const actor = log.actor_hash ? `${log.actor_hash.substring(0, 10)}...` : '<span class="text-slate-400">null</span>';
-        const ip = log.ip_hash ? `${log.ip_hash.substring(0, 10)}...` : '<span class="text-slate-400">null</span>';
-
-        return `
-          <tr class="hover:bg-slate-50 transition">
-            <td class="py-3.5 px-4 text-slate-500 whitespace-nowrap">${log.created_at || 'just now'}</td>
-            <td class="py-3.5 px-4 text-navy-950 font-bold">${log.module_name}</td>
-            <td class="py-3.5 px-4 text-orange-600 font-semibold">${log.action}</td>
-            <td class="py-3.5 px-4">${badge}</td>
-            <td class="py-3.5 px-4 text-slate-600 font-mono" title="${log.actor_hash || ''}">${actor}</td>
-            <td class="py-3.5 px-4 text-slate-600 font-mono" title="${log.ip_hash || ''}">${ip}</td>
-            <td class="py-3.5 px-4 text-right">
-              <button onclick="viewPayload('${log.id}')" class="px-3 py-1.5 bg-slate-100 hover:bg-orange-50 text-navy-900 hover:text-orange-600 rounded-lg text-xs font-bold border border-slate-200 transition touch-target">
-                Inspect
-              </button>
-            </td>
-          </tr>
-        `;
-      }).join('');
-
-      // Render Mobile Touch Cards
-      mobileCardsContainer.innerHTML = filtered.map(log => {
-        const badge = log.status === 'SUCCESS' 
-          ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">SUCCESS</span>'
-          : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">ERROR</span>';
-
-        return `
-          <div class="py-3.5 space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="font-bold text-navy-950 text-xs">${log.action}</span>
-              ${badge}
-            </div>
-            <div class="text-[11px] text-slate-600 flex items-center justify-between">
-              <span>Mod: <strong class="text-orange-600 font-mono">${log.module_name}</strong></span>
-              <span class="font-mono text-[10px] text-slate-400">${log.created_at || 'now'}</span>
-            </div>
-            <div class="text-[10px] font-mono text-slate-500 truncate">
-              Actor: ${log.actor_hash ? log.actor_hash.slice(0, 18) + '...' : 'null'}
-            </div>
-            <div class="pt-1 flex justify-end">
-              <button onclick="viewPayload('${log.id}')" class="px-3.5 py-1.5 bg-slate-100 text-navy-900 rounded-xl text-xs font-bold touch-target border border-slate-200">
-                Inspect Payload
-              </button>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    // Modal Payload Inspector
-    window.viewPayload = function(logId) {
-      const item = state.logs.find(l => l.id === logId);
-      if (!item) return;
-      document.getElementById('payloadModalTitle').textContent = `Payload: ${item.action} (${item.module_name})`;
-      try {
-        const parsed = JSON.parse(item.payload || '{}');
-        document.getElementById('payloadModalContent').textContent = JSON.stringify(parsed, null, 2);
-      } catch {
-        document.getElementById('payloadModalContent').textContent = item.payload || '{}';
-      }
-      document.getElementById('payloadModal').classList.remove('hidden');
-    };
-
-    // 3. User Registration & Login Handlers
-    document.getElementById('registerForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const email = document.getElementById('regEmail').value.trim();
-      const password = document.getElementById('regPassword').value;
-      const site_name = document.getElementById('regSiteName').value.trim() || 'My Production Site';
-      const domain = document.getElementById('regDomain').value.trim();
-
-      try {
-        const res = await fetch(`${state.apiUrl.replace(/\/+$/, '')}/v1/auth/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, site_name, domain })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to register account');
-
-        state.currentUser = data.user;
-        state.apiToken = data.token;
-        state.projectId = data.site.project_id;
-        state.connectedSites = [data.site];
-
-        localStorage.setItem('cloudlogger_user', JSON.stringify(state.currentUser));
-        localStorage.setItem('cloudlogger_api_token', state.apiToken);
-        localStorage.setItem('cloudlogger_project_id', state.projectId);
-        localStorage.setItem('cloudlogger_sites', JSON.stringify(state.connectedSites));
-
-        showToast('Account registered! $5 Pro SaaS access activated via Whop.com.', 'success');
-        syncAccountUI();
-        document.getElementById('accountModal').classList.add('hidden');
-        fetchLogs();
-      } catch (err) {
-        showToast(err.message, 'error');
-      }
-    });
-
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const email = document.getElementById('loginEmail').value.trim();
-      const password = document.getElementById('loginPassword').value;
-
-      try {
-        const res = await fetch(`${state.apiUrl.replace(/\/+$/, '')}/v1/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Login failed');
-
-        state.currentUser = data.user;
-        state.apiToken = data.token;
-        state.connectedSites = data.sites || [];
-        if (state.connectedSites.length > 0) {
-          state.projectId = state.connectedSites[0].project_id;
-        }
-
-        localStorage.setItem('cloudlogger_user', JSON.stringify(state.currentUser));
-        localStorage.setItem('cloudlogger_api_token', state.apiToken);
-        localStorage.setItem('cloudlogger_project_id', state.projectId);
-        localStorage.setItem('cloudlogger_sites', JSON.stringify(state.connectedSites));
-
-        showToast(`Welcome back, ${state.currentUser.email}!`, 'success');
-        syncAccountUI();
-        document.getElementById('accountModal').classList.add('hidden');
-        fetchLogs();
-      } catch (err) {
-        showToast(err.message, 'error');
-      }
-    });
-
-    // Add New Connected Site Handler
-    document.getElementById('addSiteForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const name = document.getElementById('newSiteName').value.trim();
-      const domain = document.getElementById('newSiteDomain').value.trim();
-
-      try {
-        const res = await fetch(`${state.apiUrl.replace(/\/+$/, '')}/v1/sites`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${state.apiToken}`
-          },
-          body: JSON.stringify({ name, domain })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to connect new site');
-
-        state.connectedSites.unshift(data.site);
-        localStorage.setItem('cloudlogger_sites', JSON.stringify(state.connectedSites));
-        renderSitesList();
-        updateSiteSelectDropdown();
-        showToast(`Connected site "${name}" added!`, 'success');
-        document.getElementById('newSiteName').value = '';
-        document.getElementById('newSiteDomain').value = '';
-      } catch (err) {
-        showToast(err.message, 'error');
-      }
-    });
-
-    // Whop License Key Activation
-    document.getElementById('activateLicenseForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const key = document.getElementById('whopLicenseInput').value.trim();
-      try {
-        const res = await fetch(`${state.apiUrl.replace(/\/+$/, '')}/v1/billing/activate`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${state.apiToken}`
-          },
-          body: JSON.stringify({ license_key: key })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Activation failed');
-        showToast('Whop.com $5 membership activated successfully!', 'success');
-        document.getElementById('billingModal').classList.add('hidden');
-      } catch (err) {
-        showToast(err.message, 'error');
-      }
-    });
-
-    // Send Real Sample Telemetry Log directly from UI
-    document.getElementById('sendTestLogBtn').addEventListener('click', async () => {
-      showToast('Transmitting live telemetry log to edge worker...', 'success');
-      try {
-        const res = await fetch(`${state.apiUrl.replace(/\/+$/, '')}/v1/logs`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${state.apiToken}`
-          },
-          body: JSON.stringify({
-            project_id: state.projectId,
-            module_name: 'dashboard_telemetry',
-            event_type: 'USER_ACTIVITY',
-            action: 'interactive_probe',
-            actor: state.currentUser?.email || 'admin@safespaceshub.com',
-            status: 'SUCCESS',
-            payload: { client_time: new Date().toISOString(), platform: navigator.userAgent },
-            metadata: { ip_address: '198.51.100.1' }
-          })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Ingestion failed');
-        showToast(`Log ingested! ID: ${data.log_id.slice(0, 8)}...`, 'success');
-        fetchLogs();
-      } catch (err) {
-        showToast(`Test log failed: ${err.message}`, 'error');
-      }
-    });
-
-    // Documentation Tab Switcher
-    window.switchDocTab = function(tabId) {
-      ['arch', 'privacy', 'api', 'sdks', 'billing', 'embed'].forEach(id => {
-        const btn = document.getElementById(`docTab-${id}`);
-        const pane = document.getElementById(`docPane-${id}`);
-        if (id === tabId) {
-          btn.className = 'px-3.5 py-2 font-bold rounded-xl bg-navy-900 text-white shrink-0';
-          pane.classList.remove('hidden');
+        if (!site.verified) {
+          var meta = '<meta name="cloudlogger-verify" content="' + site.verify_token + '">';
+          var fileUrl = site.domain + '/.well-known/cloudlogger-verify.txt';
+          card.appendChild(el('div', { class: 'steps' }, [
+            el('strong', { text: 'Show us this website is yours' }),
+            el('ol', {}, [
+              el('li', {}, [el('span', { text: 'Ask whoever manages your website to add this line to the top of your home page:' }),
+                el('div', { class: 'copybox' }, [el('code', { text: meta }), copyButton(meta)])]),
+              el('li', {}, [el('span', { text: 'Or, if that is easier, create a plain text file at ' + fileUrl + ' that contains only this code:' }),
+                el('div', { class: 'copybox' }, [el('code', { text: site.verify_token }), copyButton(site.verify_token)])]),
+              el('li', { text: 'Choose “Check now”. We will look for it and mark your website as verified.' })
+            ])
+          ]));
+          var check = el('button', { class: 'btn btn-primary btn-small', type: 'button', text: 'Check now' });
+          check.addEventListener('click', function () { verifySite(site, check, msg); });
+          card.appendChild(el('div', { class: 'btn-row' }, [check]));
         } else {
-          btn.className = 'px-3.5 py-2 font-bold rounded-xl text-slate-600 hover:text-navy-900 shrink-0';
-          pane.classList.add('hidden');
+          var view = el('button', { class: 'btn btn-dark btn-small', type: 'button', text: 'View activity' });
+          view.addEventListener('click', function () { openActivity(site); });
+          card.appendChild(el('div', { class: 'btn-row' }, [view]));
+          if (!state.demo) card.appendChild(developerNotes(site));
         }
-      });
-    };
-
-    // Code Snippet Generator
-    window.openSnippetModal = function(projId = state.projectId) {
-      updateSnippetCode(projId);
-      document.getElementById('snippetModal').classList.remove('hidden');
-    };
-
-    function updateSnippetCode(projId = state.projectId) {
-      const codeBlock = document.getElementById('snippetCodeBlock');
-      const token = state.apiToken;
-      const api = state.apiUrl;
-
-      if (state.activeSnippetTab === 'curl') {
-        codeBlock.textContent = `curl -X POST "${api}/v1/logs" \\
-  -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer ${token}" \\
-  -d '{
-    "project_id": "${projId}",
-    "module_name": "payments_engine",
-    "event_type": "CHECKOUT",
-    "action": "order_completed",
-    "actor": "user_id_481",
-    "status": "SUCCESS",
-    "payload": { "total": 49.99, "currency": "USD" },
-    "metadata": { "ip_address": "203.0.113.1" }
-  }'`;
-      } else if (state.activeSnippetTab === 'node') {
-        codeBlock.textContent = `// Node.js (Fetch API)
-await fetch("${api}/v1/logs", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "Authorization": "Bearer ${token}"
-  },
-  body: JSON.stringify({
-    project_id: "${projId}",
-    module_name: "auth_service",
-    action: "login_success",
-    actor: "customer_id",
-    status: "SUCCESS",
-    payload: { role: "member" },
-    metadata: { ip_address: req.ip }
-  })
-});`;
-      } else {
-        codeBlock.textContent = `# Python (requests)
-import requests
-
-requests.post("${api}/v1/logs",
-  headers={"Authorization": "Bearer ${token}"},
-  json={
-    "project_id": "${projId}",
-    "module_name": "backend_tasks",
-    "action": "batch_job_finished",
-    "actor": "cron_worker",
-    "status": "SUCCESS",
-    "payload": {"records_processed": 500},
-    "metadata": {"ip_address": "127.0.0.1"}
-  }
-)`;
+        card.appendChild(msg);
+        return card;
       }
-    }
 
-    // Modal Listeners
-    document.getElementById('docsBtn').addEventListener('click', () => document.getElementById('docsModal').classList.remove('hidden'));
-    document.getElementById('mobileDocsBtn').addEventListener('click', () => document.getElementById('docsModal').classList.remove('hidden'));
-    document.getElementById('closeDocsBtn').addEventListener('click', () => document.getElementById('docsModal').classList.add('hidden'));
+      function copyButton(text) {
+        var b = el('button', { class: 'btn btn-line btn-small', type: 'button', text: 'Copy', style: 'color:var(--navy)' });
+        b.addEventListener('click', function () { copyText(text); });
+        return b;
+      }
 
-    window.openBillingModal = function() {
-      document.getElementById('billingModal').classList.remove('hidden');
-    };
-    document.getElementById('billingBtn').addEventListener('click', openBillingModal);
-    document.getElementById('mobileBillingBtn').addEventListener('click', () => {
-      document.getElementById('mobileDrawer').classList.add('hidden');
-      openBillingModal();
-    });
-    document.getElementById('closeBillingBtn').addEventListener('click', () => document.getElementById('billingModal').classList.add('hidden'));
+      function developerNotes(site) {
+        var code = 'fetch("' + API + '/v1/logs", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer ' + site.ingest_key +
+          '",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({\n    project_id: "' + site.project_id +
+          '",\n    module_name: "AREA_NAME",\n    action: "WHAT_HAPPENED",\n    status: "SUCCESS"\n  })\n});';
+        return el('details', {}, [
+          el('summary', { text: 'For your web developer' }),
+          el('p', { class: 'hint', text: 'Share this with the person who builds your website. It sends one activity to CloudLogger. Replace AREA_NAME and WHAT_HAPPENED with short words that describe the moment.' }),
+          el('pre', {}, [el('code', { text: code })]),
+          el('div', { class: 'btn-row' }, [copyButton(code)])
+        ]);
+      }
 
-    document.getElementById('quickSnippetBtn').addEventListener('click', () => openSnippetModal());
-    document.getElementById('closeSnippetBtn').addEventListener('click', () => document.getElementById('snippetModal').classList.add('hidden'));
+      async function verifySite(site, button, msg) {
+        if (state.demo) { toast('Create an account to verify your own website.'); return; }
+        button.disabled = true; button.textContent = 'Checking…'; msg.className = 'msg hidden';
+        try {
+          var data = await request('/v1/sites/' + encodeURIComponent(site.id) + '/verify', { method: 'POST' });
+          if (data.verified) { toast('Your website is verified.'); await loadSites(); return; }
+          msg.textContent = data.message; msg.className = 'msg msg-bad';
+        } catch (e) { msg.textContent = e.message; msg.className = 'msg msg-bad'; }
+        button.disabled = false; button.textContent = 'Check now';
+      }
 
-    document.getElementById('tabCurlBtn').addEventListener('click', (e) => {
-      state.activeSnippetTab = 'curl';
-      setActiveSnippetTab(e.target);
-      updateSnippetCode();
-    });
-    document.getElementById('tabNodeBtn').addEventListener('click', (e) => {
-      state.activeSnippetTab = 'node';
-      setActiveSnippetTab(e.target);
-      updateSnippetCode();
-    });
-    document.getElementById('tabPythonBtn').addEventListener('click', (e) => {
-      state.activeSnippetTab = 'python';
-      setActiveSnippetTab(e.target);
-      updateSnippetCode();
-    });
+      // ---- Activity ----
+      async function openActivity(site) {
+        state.activeSite = site;
+        $('activityTitle').textContent = 'Activity for ' + site.name;
+        $('activityCard').classList.remove('hidden');
+        await refreshActivity();
+        $('activityCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
 
-    function setActiveSnippetTab(btn) {
-      ['tabCurlBtn', 'tabNodeBtn', 'tabPythonBtn'].forEach(id => {
-        document.getElementById(id).className = 'flex-1 py-1.5 font-bold rounded-lg text-slate-600 hover:text-navy-900';
+      async function refreshActivity() {
+        var site = state.activeSite; if (!site) return;
+        var body = $('activityBody');
+        var rows;
+        if (state.demo) {
+          rows = demoActivity().map(function (r) { return { when: whenText(r.at), area: r.area, what: r.what, result: r.result }; });
+        } else {
+          body.replaceChildren(el('p', { class: 'empty', text: 'Loading…' }));
+          try {
+            var data = await request('/v1/logs?project_id=' + encodeURIComponent(site.project_id));
+            rows = data.map(function (r) { return { when: whenText(r.created_at), area: r.module_name, what: r.action, result: r.status }; });
+          } catch (e) { body.replaceChildren(el('p', { class: 'msg msg-bad', text: e.message })); return; }
+        }
+        if (!rows.length) {
+          body.replaceChildren(el('p', { class: 'empty', text: 'Nothing has been recorded yet. Once your website sends its first activity, it will appear here.' }));
+          return;
+        }
+        var table = el('table', {}, [
+          el('thead', {}, [el('tr', {}, ['When', 'Area', 'What happened', 'Result'].map(function (h) { return el('th', { scope: 'col', text: h }); }))]),
+          el('tbody', {}, rows.map(function (r) {
+            var bad = /fail|error|denied|invalid|declin/i.test(r.result);
+            return el('tr', {}, [
+              el('td', { text: r.when }), el('td', { text: r.area }), el('td', { text: r.what }),
+              el('td', {}, [el('span', { class: 'badge ' + (bad ? 'badge-problem' : 'badge-ok'), text: r.result })])
+            ]);
+          }))
+        ]);
+        body.replaceChildren(table);
+      }
+
+      // ---- Add a website ----
+      function setAddFormOpen(open) {
+        $('addSiteForm').classList.toggle('hidden', !open);
+        $('addSiteError').classList.add('hidden');
+        if (open) $('siteName').focus();
+      }
+      $('addSiteBtn').addEventListener('click', function () {
+        if (state.demo) { toast('Create an account to add your own website.'); return; }
+        setAddFormOpen($('addSiteForm').classList.contains('hidden'));
       });
-      btn.className = 'flex-1 py-1.5 font-bold rounded-lg bg-orange-500 text-white';
-    }
+      $('cancelAddSite').addEventListener('click', function () { setAddFormOpen(false); });
+      $('addSiteForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var err = $('addSiteError'); err.classList.add('hidden');
+        try {
+          await request('/v1/sites', { method: 'POST', body: { name: $('siteName').value, domain: $('siteDomain').value } });
+          $('addSiteForm').reset(); setAddFormOpen(false); await loadSites();
+          toast('Website added. Now show us it is yours.');
+        } catch (ex) { err.textContent = ex.message; err.classList.remove('hidden'); }
+      });
+      $('refreshBtn').addEventListener('click', refreshActivity);
 
-    // Auth Modal Toggling
-    const accountModal = document.getElementById('accountModal');
-    document.getElementById('accountBtn').addEventListener('click', () => accountModal.classList.remove('hidden'));
-    document.getElementById('mobileAccountBtn').addEventListener('click', () => {
-      document.getElementById('mobileDrawer').classList.add('hidden');
-      accountModal.classList.remove('hidden');
-    });
-    document.getElementById('closeAccountBtn').addEventListener('click', () => accountModal.classList.add('hidden'));
+      // ---- Sign in / create account ----
+      var dlg = $('authDialog');
+      function setAuthMode(mode) {
+        state.authMode = mode;
+        var signup = mode === 'signup';
+        $('tabLogin').setAttribute('aria-selected', String(!signup));
+        $('tabSignup').setAttribute('aria-selected', String(signup));
+        $('authSubmit').textContent = signup ? 'Create my account' : 'Log in';
+        $('pwHint').classList.toggle('hidden', !signup);
+        $('authPassword').setAttribute('autocomplete', signup ? 'new-password' : 'current-password');
+        $('authError').classList.add('hidden');
+      }
+      function openAuth(mode) {
+        if (state.demo) { state.demo = false; showScreen(); }
+        setAuthMode(mode); $('authForm').reset();
+        if (!dlg.open) dlg.showModal();
+        $('authEmail').focus();
+      }
+      $('tabLogin').addEventListener('click', function () { setAuthMode('login'); });
+      $('tabSignup').addEventListener('click', function () { setAuthMode('signup'); });
+      $('authCancel').addEventListener('click', function () { dlg.close(); });
+      $('authForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var err = $('authError'), btn = $('authSubmit'); err.classList.add('hidden');
+        btn.disabled = true;
+        try {
+          var path = state.authMode === 'signup' ? '/v1/auth/register' : '/v1/auth/login';
+          var data = await request(path, { method: 'POST', auth: false, body: { email: $('authEmail').value, password: $('authPassword').value } });
+          state.token = data.token; state.email = data.user.email; state.demo = false;
+          localStorage.setItem('cl_token', state.token); localStorage.setItem('cl_email', state.email);
+          dlg.close(); showScreen(); await loadSites();
+        } catch (ex) { err.textContent = ex.message; err.classList.remove('hidden'); }
+        btn.disabled = false;
+      });
 
-    document.getElementById('tabRegisterBtn').addEventListener('click', () => {
-      document.getElementById('tabRegisterBtn').className = 'flex-1 py-2 text-xs font-bold rounded-lg bg-orange-500 text-white transition';
-      document.getElementById('tabLoginBtn').className = 'flex-1 py-2 text-xs font-bold rounded-lg text-slate-600 hover:text-navy-900 transition';
-      document.getElementById('registerForm').classList.remove('hidden');
-      document.getElementById('loginForm').classList.add('hidden');
-    });
+      // ---- Wire up buttons ----
+      $('loginBtn').addEventListener('click', function () { openAuth('login'); });
+      $('signupBtn').addEventListener('click', function () { openAuth('signup'); });
+      $('demoBtn').addEventListener('click', enterDemo);
+      $('logoutBtn').addEventListener('click', signOut);
+      document.addEventListener('click', function (e) {
+        var open = e.target.closest && e.target.closest('[data-open]');
+        if (!open) return;
+        var what = open.getAttribute('data-open');
+        if (what === 'demo') enterDemo(); else openAuth(what);
+      });
 
-    document.getElementById('tabLoginBtn').addEventListener('click', () => {
-      document.getElementById('tabLoginBtn').className = 'flex-1 py-2 text-xs font-bold rounded-lg bg-orange-500 text-white transition';
-      document.getElementById('tabRegisterBtn').className = 'flex-1 py-2 text-xs font-bold rounded-lg text-slate-600 hover:text-navy-900 transition';
-      document.getElementById('loginForm').classList.remove('hidden');
-      document.getElementById('registerForm').classList.add('hidden');
-    });
-
-    document.getElementById('signOutBtn').addEventListener('click', () => {
-      localStorage.removeItem('cloudlogger_user');
-      state.currentUser = null;
-      syncAccountUI();
-      showToast('Signed out of account.', 'success');
-    });
-
-    document.getElementById('copyApiKeyBtn').addEventListener('click', () => {
-      navigator.clipboard.writeText(state.currentUser?.api_key || '');
-      showToast('API Key copied to clipboard!', 'success');
-    });
-
-    // Sites Modal
-    const sitesModal = document.getElementById('sitesModal');
-    const openSites = () => {
-      renderSitesList();
-      sitesModal.classList.remove('hidden');
-    };
-    document.getElementById('sitesManageBtn').addEventListener('click', openSites);
-    document.getElementById('mobileSitesManageBtn').addEventListener('click', () => {
-      document.getElementById('mobileDrawer').classList.add('hidden');
-      openSites();
-    });
-    document.getElementById('addNewSiteQuickBtn').addEventListener('click', openSites);
-    document.getElementById('closeSitesBtn').addEventListener('click', () => sitesModal.classList.add('hidden'));
-
-    // Config Modal
-    const configModal = document.getElementById('configModal');
-    const openConfig = () => {
-      document.getElementById('apiUrlInput').value = state.apiUrl;
-      document.getElementById('apiTokenInput').value = state.apiToken;
-      document.getElementById('projectIdInput').value = state.projectId;
-      configModal.classList.remove('hidden');
-    };
-    document.getElementById('configToggleBtn').addEventListener('click', openConfig);
-    document.getElementById('mobileConfigToggleBtn').addEventListener('click', () => {
-      document.getElementById('mobileDrawer').classList.add('hidden');
-      openConfig();
-    });
-    document.getElementById('closeConfigBtn').addEventListener('click', () => configModal.classList.add('hidden'));
-    document.getElementById('saveConfigBtn').addEventListener('click', () => {
-      state.apiUrl = document.getElementById('apiUrlInput').value.trim();
-      state.apiToken = document.getElementById('apiTokenInput').value.trim();
-      state.projectId = document.getElementById('projectIdInput').value.trim();
-      localStorage.setItem('cloudlogger_api_url', state.apiUrl);
-      localStorage.setItem('cloudlogger_api_token', state.apiToken);
-      localStorage.setItem('cloudlogger_project_id', state.projectId);
-      configModal.classList.add('hidden');
-      updateSiteSelectDropdown();
-      fetchLogs();
-    });
-
-    document.getElementById('closePayloadBtn').addEventListener('click', () => {
-      document.getElementById('payloadModal').classList.add('hidden');
-    });
-
-    // Mobile Hamburger
-    document.getElementById('mobileMenuBtn').addEventListener('click', () => {
-      document.getElementById('mobileDrawer').classList.toggle('hidden');
-    });
-
-    // Filtering & Site Switching Listeners
-    activeSiteSelect.addEventListener('change', (e) => {
-      state.projectId = e.target.value;
-      localStorage.setItem('cloudlogger_project_id', state.projectId);
-      fetchLogs();
-    });
-    document.getElementById('filterSearch').addEventListener('input', renderLogsView);
-    document.getElementById('filterModule').addEventListener('change', renderLogsView);
-    document.getElementById('filterStatus').addEventListener('change', renderLogsView);
-    document.getElementById('refreshBtn').addEventListener('click', fetchLogs);
-    document.getElementById('mobileRefreshBtn').addEventListener('click', fetchLogs);
-
-    // Initial Startup
-    syncAccountUI();
-    fetchLogs();
+      showScreen();
+      if (state.token) loadSites();
+    })();
   </script>
 </body>
 </html>

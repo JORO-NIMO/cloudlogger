@@ -1,356 +1,334 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import worker, { secureHMAC } from '../src/index.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import worker, { secureHMAC, normalizeDomain, extractMetaToken } from "../src/index.js";
 
-let lastSql = null;
-let lastBindings = [];
+// ---------------------------------------------------------------------------
+// In-memory stand-in for Cloudflare D1. It understands exactly the statements
+// the worker issues, so a changed query in src/index.js fails these tests.
+// ---------------------------------------------------------------------------
+let users, sites, logs;
 
-// In-memory mock storage for multi-tenant account, site & billing simulation
-const mockUsers = [];
-const mockSites = [];
-const mockLogs = [
-  { id: "1", project_id: "test-app", module_name: "auth", status: "SUCCESS", payload: "{}" }
-];
-
-// Setup Mock Environment variables matching Wrangler settings
 const mockEnv = {
-  CLIENT_API_TOKEN: "test-token-12345",
+  CLIENT_API_TOKEN: "test-admin-token",
   HASHING_SECRET: "test-salt-abcde",
-  WHOP_CHECKOUT_URL: "https://whop.com/safespaceshub/cloudlogger",
-  WHOP_WEBHOOK_SECRET: "whop_webhook_secret_dev",
   DB: {
-    prepare: (sql) => {
-      lastSql = sql;
-      return {
-        bind: (...args) => {
-          lastBindings = args;
-          return {
-            run: async () => {
-              if (sql.includes("INSERT INTO users")) {
-                mockUsers.push({
-                  id: args[0],
-                  email: args[1],
-                  password_hash: args[2],
-                  api_key: args[3],
-                  plan: args[4] || "pro_monthly_5",
-                  is_active_paid: args[5] !== undefined ? args[5] : 1
-                });
-              } else if (sql.includes("INSERT INTO sites")) {
-                mockSites.push({
-                  id: args[0],
-                  user_id: args[1],
-                  name: args[2],
-                  project_id: args[3],
-                  domain: args[4]
-                });
-              } else if (sql.includes("UPDATE users SET is_active_paid")) {
-                const targetEmail = args[args.length - 1];
-                const found = mockUsers.find((u) => u.email === targetEmail || u.id === targetEmail);
-                if (found) {
-                  found.is_active_paid = args[0] !== undefined ? args[0] : 1;
-                }
-              }
-              return { success: true };
-            },
-            all: async () => {
-              if (sql.includes("FROM users WHERE api_key = ?")) {
-                const found = mockUsers.find((u) => u.api_key === args[0]);
-                return { results: found ? [found] : [] };
-              }
-              if (sql.includes("FROM users WHERE email = ? AND password_hash = ?")) {
-                const found = mockUsers.find((u) => u.email === args[0] && u.password_hash === args[1]);
-                return { results: found ? [found] : [] };
-              }
-              if (sql.includes("FROM sites WHERE user_id = ?")) {
-                const found = mockSites.filter((s) => s.user_id === args[0]);
-                return { results: found };
-              }
-              if (sql.includes("FROM sites")) {
-                return { results: mockSites };
-              }
-              return { results: mockLogs };
-            }
-          };
+    prepare: (sql) => ({
+      bind: (...a) => ({
+        run: async () => {
+          if (sql.includes("INSERT INTO users")) {
+            if (users.some((u) => u.email === a[1])) throw new Error("UNIQUE constraint failed: users.email");
+            users.push({ id: a[0], email: a[1], password_hash: a[2], api_key: a[3], plan: "pro_monthly_5", is_active_paid: 1 });
+          } else if (sql.includes("INSERT INTO sites")) {
+            sites.push({
+              id: a[0], user_id: a[1], name: a[2], project_id: a[3], domain: a[4],
+              verify_token: a[5], ingest_key: a[6], verified_at: null, created_at: "2026-01-01 00:00:00"
+            });
+          } else if (sql.includes("UPDATE sites SET verified_at")) {
+            const site = sites.find((s) => s.id === a[0]);
+            if (site) site.verified_at = "2026-01-01 00:00:00";
+          } else if (sql.includes("INSERT INTO system_logs")) {
+            logs.push({
+              id: a[0], project_id: a[1], module_name: a[2], event_type: a[3], action: a[4],
+              actor_hash: a[5], status: a[6], payload: a[7], ip_hash: a[8]
+            });
+          }
+          return { success: true };
+        },
+        all: async () => {
+          if (sql.includes("FROM users WHERE api_key")) return { results: users.filter((u) => u.api_key === a[0]) };
+          if (sql.includes("FROM users WHERE email = ? AND password_hash")) {
+            return { results: users.filter((u) => u.email === a[0] && u.password_hash === a[1]) };
+          }
+          if (sql.includes("FROM sites WHERE ingest_key")) return { results: sites.filter((s) => s.ingest_key === a[0]) };
+          if (sql.includes("FROM sites WHERE id = ? AND user_id")) {
+            return { results: sites.filter((s) => s.id === a[0] && s.user_id === a[1]) };
+          }
+          if (sql.includes("FROM sites WHERE id = ?")) return { results: sites.filter((s) => s.id === a[0]) };
+          if (sql.includes("FROM sites WHERE project_id = ? AND user_id")) {
+            return { results: sites.filter((s) => s.project_id === a[0] && s.user_id === a[1]) };
+          }
+          if (sql.includes("FROM sites WHERE user_id")) return { results: sites.filter((s) => s.user_id === a[0]) };
+          if (sql.includes("FROM sites")) return { results: sites };
+          if (sql.includes("FROM system_logs WHERE project_id")) return { results: logs.filter((l) => l.project_id === a[0]) };
+          return { results: [] };
         }
-      };
-    }
+      })
+    })
   }
 };
 
-describe("Serverless Logging Engine Unit Testing Suite", () => {
-  beforeEach(() => {
-    lastSql = null;
-    lastBindings = [];
-  });
-
-  it("Should return a 401 error code if the client fails to provide an Authorization token", async () => {
-    const request = new Request("https://logger.local", {
-      method: "POST",
-      body: JSON.stringify({}),
-      headers: { "Content-Type": "application/json" }
-    });
-
-    const response = await worker.fetch(request, mockEnv);
-    expect(response.status).toBe(401);
-    const data = await response.json();
-    expect(data.error).toContain("Unauthorized");
-  });
-
-  it("Should return a 401 error code if the client provides an invalid Authorization token", async () => {
-    const request = new Request("https://logger.local/v1/logs", {
-      method: "POST",
-      body: JSON.stringify({
-        project_id: "saas-platform-one",
-        module_name: "payments",
-        action: "test",
-        status: "SUCCESS"
-      }),
+const call = (path, { method = "POST", body, token, headers = {} } = {}) =>
+  worker.fetch(
+    new Request(`https://logger.local${path}`, {
+      method,
+      body: body === undefined ? undefined : JSON.stringify(body),
       headers: {
         "Content-Type": "application/json",
-        "Authorization": "Bearer wrong-token"
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers
       }
-    });
+    }),
+    mockEnv
+  );
 
-    const response = await worker.fetch(request, mockEnv);
-    expect(response.status).toBe(401);
-    const data = await response.json();
-    expect(data.error).toBe("Invalid API credentials");
+const register = async (email = "owner@example.com") => {
+  const res = await call("/v1/auth/register", { body: { email, password: "a-good-password" } });
+  return (await res.json()).token;
+};
+
+const addSite = async (token, domain = "mysite.com") => {
+  const res = await call("/v1/sites", { token, body: { name: "My Shop", domain } });
+  return (await res.json()).site;
+};
+
+const pageWithCode = (code) =>
+  new Response(`<html><head><meta name="cloudlogger-verify" content="${code}"></head></html>`, { status: 200 });
+
+const verifiedSite = async (token, domain = "mysite.com") => {
+  const site = await addSite(token, domain);
+  vi.stubGlobal("fetch", vi.fn(async () => pageWithCode(site.verify_token)));
+  await call(`/v1/sites/${site.id}/verify`, { token });
+  return site;
+};
+
+const logBody = (projectId, extra = {}) => ({
+  project_id: projectId,
+  module_name: "checkout",
+  action: "order_placed",
+  status: "SUCCESS",
+  ...extra
+});
+
+beforeEach(() => {
+  users = [];
+  sites = [];
+  logs = [];
+});
+afterEach(() => vi.unstubAllGlobals());
+
+describe("Access control", () => {
+  it("returns 401 when no Authorization header is sent", async () => {
+    const res = await call("/v1/logs", { body: {} });
+    expect(res.status).toBe(401);
+    expect((await res.json()).error).toContain("Unauthorized");
   });
 
-  it("Should successfully process valid entries, hash client IDs, and log transactions correctly", async () => {
-    const validLogPayload = {
-      project_id: "saas-platform-one",
-      module_name: "payments_flutterwave",
-      event_type: "USER_ACTIVITY",
-      action: "checkout_success",
-      actor: "user_uganda_99",
-      status: "SUCCESS",
-      payload: { amount: 25000, currency: "UGX" },
-      metadata: { ip_address: "197.239.4.1" }
-    };
-
-    const request = new Request("https://logger.local", {
-      method: "POST",
-      body: JSON.stringify(validLogPayload),
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer test-token-12345"
-      }
-    });
-
-    const expectedActorHash = await secureHMAC(validLogPayload.actor, mockEnv.HASHING_SECRET);
-    const expectedIpHash = await secureHMAC(validLogPayload.metadata.ip_address, mockEnv.HASHING_SECRET);
-
-    const response = await worker.fetch(request, mockEnv);
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.success).toBe(true);
-    expect(data.log_id).toBeDefined();
-
-    expect(lastSql).toContain("INSERT INTO system_logs");
-    expect(lastBindings[1]).toBe("saas-platform-one");
-    expect(lastBindings[2]).toBe("payments_flutterwave");
-    expect(lastBindings[3]).toBe("USER_ACTIVITY");
-    expect(lastBindings[4]).toBe("checkout_success");
-    expect(lastBindings[5]).toBe(expectedActorHash);
-    expect(lastBindings[6]).toBe("SUCCESS");
-    expect(lastBindings[7]).toBe(JSON.stringify({ amount: 25000, currency: "UGX" }));
-    expect(lastBindings[8]).toBe(expectedIpHash);
-
-    expect(lastBindings).not.toContain("user_uganda_99");
-    expect(lastBindings).not.toContain("197.239.4.1");
+  it("returns 401 for an invalid token", async () => {
+    const res = await call("/v1/logs", { token: "wrong-token", body: logBody("x") });
+    expect(res.status).toBe(401);
+    expect((await res.json()).error).toBe("Invalid API credentials");
   });
 
-  it("Should reject payloads missing structural keys like project_id or module_name", async () => {
-    const brokenPayload = {
-      project_id: "saas-platform-one",
-      action: "checkout_success",
-      status: "SUCCESS"
-    };
-
-    const request = new Request("https://logger.local", {
-      method: "POST",
-      body: JSON.stringify(brokenPayload),
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer test-token-12345"
-      }
-    });
-
-    const response = await worker.fetch(request, mockEnv);
-    expect(response.status).toBe(400);
-    const data = await response.json();
-    expect(data.error).toContain("Missing required core schema strings");
+  it("answers CORS preflight with 204 before any authentication", async () => {
+    const res = await call("/v1/logs", { method: "OPTIONS" });
+    expect(res.status).toBe(204);
+    expect(res.headers.get("Access-Control-Allow-Methods")).toContain("POST");
   });
 
-  it("Should reject malformed or invalid JSON payloads with a 400 status", async () => {
-    const request = new Request("https://logger.local/v1/logs", {
-      method: "POST",
-      body: "invalid-non-json-string",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer test-token-12345"
-      }
-    });
+  it("no longer offers a self-service upgrade route", async () => {
+    const token = await register();
+    const res = await call("/v1/billing/activate", { token, body: { license_key: "anything" } });
+    expect(res.status).toBe(404);
+  });
+});
 
-    const response = await worker.fetch(request, mockEnv);
-    expect(response.status).toBe(400);
-    const data = await response.json();
-    expect(data.error).toContain("Invalid JSON format");
+describe("Logging and privacy (administrator key)", () => {
+  it("stores only hashes of the person and IP address (200)", async () => {
+    const res = await call("/v1/logs", {
+      token: "test-admin-token",
+      body: logBody("any-project", {
+        actor: "jane@shop.com",
+        metadata: { ip_address: "197.239.4.1" },
+        payload: { amount: 25000, actor: "jane@shop.com", ip_address: "197.239.4.1" }
+      })
+    });
+    expect(res.status).toBe(200);
+    expect(logs).toHaveLength(1);
+    expect(logs[0].actor_hash).toBe(await secureHMAC("jane@shop.com", mockEnv.HASHING_SECRET));
+    expect(logs[0].ip_hash).toBe(await secureHMAC("197.239.4.1", mockEnv.HASHING_SECRET));
+    const stored = JSON.stringify(logs[0]);
+    expect(stored).not.toContain("jane@shop.com");
+    expect(stored).not.toContain("197.239.4.1");
   });
 
-  it("Should support CORS preflight OPTIONS requests without requiring Authorization", async () => {
-    const request = new Request("https://logger.local/v1/logs", {
-      method: "OPTIONS",
-      headers: {
-        "Origin": "https://dashboard.example.com",
-        "Access-Control-Request-Method": "POST",
-        "Access-Control-Request-Headers": "Authorization, Content-Type"
-      }
-    });
-
-    const response = await worker.fetch(request, mockEnv);
-    expect(response.status).toBe(204);
-    expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
-    expect(response.headers.get("Access-Control-Allow-Methods")).toContain("POST");
+  it("returns 400 when required fields are missing", async () => {
+    const res = await call("/v1/logs", { token: "test-admin-token", body: { project_id: "p", module_name: "m" } });
+    expect(res.status).toBe(400);
   });
 
-  it("Should successfully retrieve logs for a given project_id via GET /v1/logs", async () => {
-    const request = new Request("https://logger.local/v1/logs?project_id=test-app", {
-      method: "GET",
-      headers: {
-        "Authorization": "Bearer test-token-12345"
-      }
-    });
+  it("returns 400 when payload is not an object", async () => {
+    const res = await call("/v1/logs", { token: "test-admin-token", body: logBody("p", { payload: "text" }) });
+    expect(res.status).toBe(400);
+  });
+});
 
-    const response = await worker.fetch(request, mockEnv);
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(Array.isArray(data)).toBe(true);
-    expect(data.length).toBe(1);
-    expect(data[0].project_id).toBe("test-app");
+describe("Accounts", () => {
+  it("creates an account without any pre-made site or sample data", async () => {
+    const res = await call("/v1/auth/register", { body: { email: "New@Example.com", password: "a-good-password" } });
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data.token).toMatch(/^cl_live_/);
+    expect(data.user.email).toBe("new@example.com");
+    expect(sites).toHaveLength(0);
+    expect(users[0].password_hash).not.toContain("a-good-password");
+    expect(JSON.stringify(data)).not.toMatch(/whop/i);
   });
 
-  it("Should return 400 when GET /v1/logs is missing project_id query parameter", async () => {
-    const request = new Request("https://logger.local/v1/logs", {
-      method: "GET",
-      headers: {
-        "Authorization": "Bearer test-token-12345"
-      }
-    });
-
-    const response = await worker.fetch(request, mockEnv);
-    expect(response.status).toBe(400);
-    const data = await response.json();
-    expect(data.error).toContain("Missing project_id");
+  it("rejects weak passwords and duplicate emails", async () => {
+    expect((await call("/v1/auth/register", { body: { email: "a@b.co", password: "short" } })).status).toBe(400);
+    await register("dup@example.com");
+    expect((await call("/v1/auth/register", { body: { email: "dup@example.com", password: "a-good-password" } })).status).toBe(409);
   });
 
-  it("Should return 404 for unknown endpoint routes", async () => {
-    const request = new Request("https://logger.local/unknown/path", {
-      method: "GET",
-      headers: {
-        "Authorization": "Bearer test-token-12345"
-      }
-    });
+  it("logs in with the right password only", async () => {
+    await register("login@example.com");
+    const ok = await call("/v1/auth/login", { body: { email: "login@example.com", password: "a-good-password" } });
+    expect(ok.status).toBe(200);
+    const bad = await call("/v1/auth/login", { body: { email: "login@example.com", password: "nope-nope-nope" } });
+    expect(bad.status).toBe(401);
+  });
+});
 
-    const response = await worker.fetch(request, mockEnv);
-    expect(response.status).toBe(404);
+describe("Site ownership and verification", () => {
+  it("adds a site as not verified, with its own codes", async () => {
+    const token = await register();
+    const site = await addSite(token, "https://www.MySite.com/shop");
+    expect(site.domain).toBe("mysite.com");
+    expect(site.verified).toBe(false);
+    expect(site.verify_token).toHaveLength(32);
+    expect(site.ingest_key).toMatch(/^cl_site_/);
   });
 
-  it("Should register a new user account, return API key, and provision initial connected site", async () => {
-    const registerReq = new Request("https://logger.local/v1/auth/register", {
-      method: "POST",
-      body: JSON.stringify({
-        email: "whop_subscriber@startup.io",
-        password: "securePassword123!",
-        site_name: "E-Commerce Web",
-        domain: "store.startup.io"
-      }),
-      headers: { "Content-Type": "application/json" }
-    });
-
-    const response = await worker.fetch(registerReq, mockEnv);
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.success).toBe(true);
-    expect(data.user.email).toBe("whop_subscriber@startup.io");
-    expect(data.user.api_key).toMatch(/^cl_live_[a-f0-9]+$/);
-    expect(data.whop.price).toBeUndefined(); // inside whop.plan
-    expect(data.whop.provider).toBe("whop.com");
+  it("rejects an invalid website address", async () => {
+    const token = await register();
+    for (const domain of ["", "localhost", "192.168.0.1", "not a site", "user@evil.com"]) {
+      const res = await call("/v1/sites", { token, body: { name: "x", domain } });
+      expect(res.status).toBe(400);
+    }
   });
 
-  it("Should authenticate an existing user via POST /v1/auth/login and return Whop pricing metadata", async () => {
-    const loginReq = new Request("https://logger.local/v1/auth/login", {
-      method: "POST",
-      body: JSON.stringify({
-        email: "whop_subscriber@startup.io",
-        password: "securePassword123!"
-      }),
-      headers: { "Content-Type": "application/json" }
-    });
-
-    const response = await worker.fetch(loginReq, mockEnv);
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.success).toBe(true);
-    expect(data.whop.provider).toBe("whop.com");
-    expect(data.whop.price).toBe("$5/month");
+  it("refuses activity from a site that is not verified", async () => {
+    const token = await register();
+    const site = await addSite(token);
+    const res = await call("/v1/logs", { token, body: logBody(site.project_id) });
+    expect(res.status).toBe(403);
+    expect(logs).toHaveLength(0);
   });
 
-  it("Should allow authenticated customers to create additional connected sites via POST /v1/sites", async () => {
-    const customer = mockUsers.find((u) => u.email === "whop_subscriber@startup.io");
-    expect(customer).toBeDefined();
-
-    const addSiteReq = new Request("https://logger.local/v1/sites", {
-      method: "POST",
-      body: JSON.stringify({
-        name: "Mobile App Backend",
-        domain: "api.startup.io"
-      }),
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${customer.api_key}`
-      }
-    });
-
-    const response = await worker.fetch(addSiteReq, mockEnv);
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.success).toBe(true);
-    expect(data.site.name).toBe("Mobile App Backend");
+  it("stays unverified when the code is not on the website", async () => {
+    const token = await register();
+    const site = await addSite(token);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("<html></html>", { status: 200 })));
+    const res = await call(`/v1/sites/${site.id}/verify`, { token });
+    expect((await res.json()).verified).toBe(false);
+    expect(sites[0].verified_at).toBeNull();
   });
 
-  it("Should process Whop.com payment webhooks at POST /v1/webhooks/whop", async () => {
-    const webhookReq = new Request("https://logger.local/v1/webhooks/whop", {
-      method: "POST",
-      body: JSON.stringify({
-        action: "payment.succeeded",
-        data: {
-          membership_id: "mem_whop_12345",
-          user_id: "usr_whop_67890",
-          user: { email: "whop_subscriber@startup.io" }
-        }
-      }),
-      headers: { "Content-Type": "application/json" }
-    });
-
-    const response = await worker.fetch(webhookReq, mockEnv);
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.success).toBe(true);
-    expect(data.provider).toBe("whop.com");
+  it("verifies when the code is on the home page", async () => {
+    const token = await register();
+    const site = await addSite(token);
+    vi.stubGlobal("fetch", vi.fn(async () => pageWithCode(site.verify_token)));
+    const res = await call(`/v1/sites/${site.id}/verify`, { token });
+    expect((await res.json()).verified).toBe(true);
+    expect(sites[0].verified_at).not.toBeNull();
   });
 
-  it("Should expose platform documentation manifest via GET /v1/docs", async () => {
-    const docsReq = new Request("https://logger.local/v1/docs", {
-      method: "GET"
-    });
+  it("verifies when the code is in the verification file", async () => {
+    const token = await register();
+    const site = await addSite(token);
+    vi.stubGlobal("fetch", vi.fn(async (url) =>
+      url.endsWith("cloudlogger-verify.txt") ? new Response(`${site.verify_token}\n`, { status: 200 }) : new Response("", { status: 404 })
+    ));
+    const res = await call(`/v1/sites/${site.id}/verify`, { token });
+    expect((await res.json()).verified).toBe(true);
+  });
 
-    const response = await worker.fetch(docsReq, mockEnv);
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.name).toContain("CloudLogger");
-    expect(data.payment_provider).toBe("whop.com");
-    expect(data.price_usd).toBe("$5 / month");
-    expect(data.endpoints.length).toBeGreaterThanOrEqual(8);
+  it("does not accept a code served from a different website after a redirect", async () => {
+    const token = await register();
+    const site = await addSite(token);
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      url: "https://evil.example/",
+      text: async () => `<meta name="cloudlogger-verify" content="${site.verify_token}">`
+    })));
+    const res = await call(`/v1/sites/${site.id}/verify`, { token });
+    expect((await res.json()).verified).toBe(false);
+  });
+
+  it("accepts activity from a verified site with the account key", async () => {
+    const token = await register();
+    const site = await verifiedSite(token);
+    const res = await call("/v1/logs", { token, body: logBody(site.project_id) });
+    expect(res.status).toBe(200);
+    expect(logs).toHaveLength(1);
+  });
+
+  it("accepts activity with the site key only for its own site and website", async () => {
+    const token = await register();
+    const site = await verifiedSite(token);
+    const own = await call("/v1/logs", {
+      token: site.ingest_key, body: logBody(site.project_id), headers: { Origin: "https://www.mysite.com" }
+    });
+    expect(own.status).toBe(200);
+
+    const otherWebsite = await call("/v1/logs", {
+      token: site.ingest_key, body: logBody(site.project_id), headers: { Origin: "https://evil.example" }
+    });
+    expect(otherWebsite.status).toBe(403);
+
+    const otherSite = await call("/v1/logs", { token: site.ingest_key, body: logBody("someone-elses-site") });
+    expect(otherSite.status).toBe(403);
+    expect(logs).toHaveLength(1);
+  });
+
+  it("keeps a site key from reading logs or listing sites", async () => {
+    const token = await register();
+    const site = await verifiedSite(token);
+    expect((await call("/v1/sites", { method: "GET", token: site.ingest_key })).status).toBe(403);
+    expect((await call(`/v1/logs?project_id=${site.project_id}`, { method: "GET", token: site.ingest_key })).status).toBe(403);
+  });
+
+  it("stops one account from writing to or reading another account's site", async () => {
+    const ownerToken = await register("owner@example.com");
+    const site = await verifiedSite(ownerToken);
+    await call("/v1/logs", { token: ownerToken, body: logBody(site.project_id) });
+
+    const intruderToken = await register("intruder@example.com");
+    const write = await call("/v1/logs", { token: intruderToken, body: logBody(site.project_id) });
+    const read = await call(`/v1/logs?project_id=${site.project_id}`, { method: "GET", token: intruderToken });
+    const verify = await call(`/v1/sites/${site.id}/verify`, { token: intruderToken });
+    expect(write.status).toBe(403);
+    expect(read.status).toBe(403);
+    expect(verify.status).toBe(404);
+
+    const mine = await call(`/v1/logs?project_id=${site.project_id}`, { method: "GET", token: ownerToken });
+    expect(await mine.json()).toHaveLength(1);
+  });
+
+  it("only lists the signed-in account's own sites", async () => {
+    const a = await register("a@example.com");
+    const b = await register("b@example.com");
+    await addSite(a, "a-site.com");
+    await addSite(b, "b-site.com");
+    const res = await call("/v1/sites", { method: "GET", token: a });
+    const data = await res.json();
+    expect(data.sites).toHaveLength(1);
+    expect(data.sites[0].domain).toBe("a-site.com");
+  });
+});
+
+describe("Helpers", () => {
+  it("normalizes website addresses", () => {
+    expect(normalizeDomain("https://www.Example.com/path?x=1")).toBe("example.com");
+    expect(normalizeDomain("shop.example.co.uk")).toBe("shop.example.co.uk");
+    expect(normalizeDomain("localhost")).toBeNull();
+    expect(normalizeDomain("10.0.0.1")).toBeNull();
+    expect(normalizeDomain("example.com:8080")).toBeNull();
+    expect(normalizeDomain(42)).toBeNull();
+  });
+
+  it("reads the verification meta tag with attributes in either order", () => {
+    expect(extractMetaToken('<meta name="cloudlogger-verify" content="abc">')).toBe("abc");
+    expect(extractMetaToken("<meta content='xyz' name='cloudlogger-verify'/>")).toBe("xyz");
+    expect(extractMetaToken('<meta name="description" content="abc">')).toBeNull();
   });
 });

@@ -1,12 +1,14 @@
 // ============================================================================
-// CloudLogger Edge Core: Serverless Log-As-A-Service (Micro-SaaS)
-// Built natively on the Cloudflare Ecosystem (Workers, D1 SQLite, Pages)
-// Integrated with Whop.com ($5/mo Payment Provider) & Web Crypto HMAC Redaction
+// CloudLogger Edge Core: serverless activity logging on Cloudflare
+// (Workers + D1 SQLite + Pages). Personal data is hashed before it is saved,
+// and every site must be proven to belong to its owner before it can log.
 // ============================================================================
 
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
 /**
- * Native Edge Web Crypto HMAC-SHA256 signature generator.
- * Converts sensitive PII (actor IDs, IP addresses) into deterministic hashes.
+ * Native Web Crypto HMAC-SHA256 signature generator.
+ * Converts sensitive values (people, IP addresses) into irreversible hashes.
  */
 export async function secureHMAC(value, secretKey) {
   if (!value || !secretKey) return null;
@@ -25,30 +27,94 @@ export async function secureHMAC(value, secretKey) {
 }
 
 /**
- * Validates incoming Bearer token against:
- * 1. env.CLIENT_API_TOKEN (System root key)
- * 2. Multi-tenant customer API keys in Cloudflare D1 (`cl_live_...`)
+ * Turns "https://www.Example.com/shop" into "example.com".
+ * Returns null for anything that is not a plain public website name
+ * (IP addresses, localhost, ports, credentials, odd characters).
+ */
+export function normalizeDomain(input) {
+  if (typeof input !== "string") return null;
+  let value = input.trim().toLowerCase();
+  if (!value || value.length > 253) return null;
+  value = value.replace(/^https?:\/\//, "");
+  value = value.split(/[/?#]/)[0];
+  if (value.includes("@") || value.includes(":")) return null;
+  value = value.replace(/^www\./, "").replace(/\.$/, "");
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(value)) return null;
+  const label = "[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?";
+  if (!new RegExp(`^(${label}\\.)+[a-z]{2,63}$`).test(value)) return null;
+  return value;
+}
+
+/** Reads the ownership code from a page's <meta name="cloudlogger-verify" content="..."> tag. */
+export function extractMetaToken(html) {
+  const tags = String(html).match(/<meta\b[^>]*>/gi) || [];
+  for (const tag of tags) {
+    if (/name\s*=\s*["']cloudlogger-verify["']/i.test(tag)) {
+      const match = tag.match(/content\s*=\s*["']([^"']*)["']/i);
+      if (match) return match[1].trim();
+    }
+  }
+  return null;
+}
+
+/**
+ * Proves a person controls a website. The owner puts their secret code either in
+ * /.well-known/cloudlogger-verify.txt or in a meta tag on the home page; we fetch
+ * the site over HTTPS and look for it. Only the site's own host is accepted.
+ */
+export async function checkSiteOwnership(domain, token, doFetch = fetch) {
+  const urls = [
+    `https://${domain}/.well-known/cloudlogger-verify.txt`,
+    `https://${domain}/`,
+    `https://www.${domain}/`
+  ];
+  for (const url of urls) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    try {
+      const res = await doFetch(url, {
+        signal: controller.signal,
+        redirect: "follow",
+        headers: { "User-Agent": "CloudLoggerVerifier/1.0" }
+      });
+      if (!res.ok) continue;
+      const finalHost = new URL(res.url || url).hostname.toLowerCase().replace(/^www\./, "");
+      if (finalHost !== domain) continue;
+      const body = (await res.text()).slice(0, 200000);
+      if (url.endsWith(".txt")) {
+        if (body.split(/\s+/).includes(token)) return true;
+      } else if (extractMetaToken(body) === token) {
+        return true;
+      }
+    } catch {
+      // Unreachable or slow site: try the next location.
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return false;
+}
+
+/**
+ * Validates the Bearer token against:
+ * 1. env.CLIENT_API_TOKEN (administrator key)
+ * 2. Account keys in D1 (cl_live_...)
+ * 3. Per-site keys in D1 (cl_site_...), which can only send activity for one site
  */
 export async function authenticateToken(authHeader, env) {
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return null;
-  }
+  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
   const token = authHeader.substring(7).trim();
   if (!token) return null;
 
-  // 1. Direct match with configured system API token
   if (env.CLIENT_API_TOKEN && token === env.CLIENT_API_TOKEN) {
     return { type: "system", user_id: "system", token, is_active_paid: 1, plan: "system_unlimited" };
   }
 
-  // 2. Multi-tenant customer API key lookup in Cloudflare D1
   if (env.DB && (token.startsWith("cl_live_") || token.startsWith("cl_test_"))) {
     try {
       const query = await env.DB.prepare(
         "SELECT id, email, api_key, plan, is_active_paid FROM users WHERE api_key = ?"
-      )
-        .bind(token)
-        .all();
+      ).bind(token).all();
       const user = query?.results?.find((u) => u.api_key === token);
       if (user) {
         return {
@@ -56,465 +122,336 @@ export async function authenticateToken(authHeader, env) {
           user_id: user.id,
           email: user.email,
           token: user.api_key,
-          plan: user.plan || "pro_monthly_5",
-          is_active_paid: user.is_active_paid !== undefined ? user.is_active_paid : 1
+          plan: user.plan,
+          is_active_paid: user.is_active_paid
         };
       }
     } catch {
-      // Graceful fallback if table does not exist yet
+      // Database not ready: treat as unauthenticated.
+    }
+  }
+
+  if (env.DB && token.startsWith("cl_site_")) {
+    try {
+      const query = await env.DB.prepare(
+        "SELECT id, user_id, project_id, domain, verified_at, ingest_key FROM sites WHERE ingest_key = ?"
+      ).bind(token).all();
+      const site = query?.results?.find((s) => s.ingest_key === token);
+      if (site) {
+        return {
+          type: "site",
+          user_id: site.user_id,
+          site_id: site.id,
+          project_id: site.project_id,
+          domain: site.domain,
+          verified: Boolean(site.verified_at)
+        };
+      }
+    } catch {
+      // Database not ready: treat as unauthenticated.
     }
   }
 
   return null;
 }
 
+function serializeSite(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    project_id: row.project_id,
+    domain: row.domain,
+    verified: Boolean(row.verified_at),
+    verify_token: row.verify_token,
+    ingest_key: row.ingest_key,
+    created_at: row.created_at
+  };
+}
+
+const SITE_COLUMNS =
+  "id, user_id, name, project_id, domain, verify_token, ingest_key, verified_at, created_at";
+
+/** Browsers send an Origin header; a site key may only be used from its own website. */
+function originAllowed(request, domain) {
+  const origin = request.headers.get("Origin");
+  if (!origin) return true;
+  try {
+    const host = new URL(origin).hostname.toLowerCase();
+    return host === domain || host.endsWith(`.${domain}`);
+  } catch {
+    return false;
+  }
+}
+
 export default {
   async fetch(request, env) {
-    // Standard Cross-Origin Resource Sharing (CORS) Headers
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Whop-Signature"
+      "Access-Control-Allow-Headers": "Authorization, Content-Type"
     };
+    const respond = (body, status = 200) =>
+      new Response(JSON.stringify(body), { status, headers: { ...JSON_HEADERS, ...corsHeaders } });
 
-    // 1. CORS Preflight Resolution (Handled before authentication to satisfy browser security)
+    // CORS preflight is answered before any authentication.
     if (request.method === "OPTIONS") {
-      return new Response(null, {
-        status: 204,
-        headers: corsHeaders
-      });
+      return new Response(null, { status: 204, headers: corsHeaders });
     }
 
     const url = new URL(request.url);
     const pathname = url.pathname.replace(/\/+$/, "") || "/";
-    const whopCheckoutUrl = env.WHOP_CHECKOUT_URL || "https://whop.com/safespaceshub/cloudlogger";
 
-    // 2. Public Route: API Documentation Manifest
+    // ---- Public routes ----------------------------------------------------
     if (request.method === "GET" && pathname === "/v1/docs") {
-      return new Response(
-        JSON.stringify({
-          name: "CloudLogger Edge API",
-          version: "1.0.0",
-          payment_provider: "whop.com",
-          price_usd: "$5 / month",
-          pricing_model: "Micro-SaaS all-inclusive (Accounts, Multi-Sites, Edge Log Ingestion)",
-          endpoints: [
-            { method: "POST", path: "/v1/auth/register", description: "Create customer account & generate API key" },
-            { method: "POST", path: "/v1/auth/login", description: "Authenticate user & fetch connected sites" },
-            { method: "GET",  path: "/v1/sites", description: "List connected sites (Requires Bearer Token)" },
-            { method: "POST", path: "/v1/sites", description: "Connect new site or microservice (Requires Bearer Token)" },
-            { method: "POST", path: "/v1/logs", description: "Ingest telemetry event with Web Crypto HMAC PII redaction" },
-            { method: "GET",  path: "/v1/logs?project_id=:id", description: "Retrieve telemetry events for site" },
-            { method: "POST", path: "/v1/webhooks/whop", description: "Whop.com payment & membership webhook handler" },
-            { method: "POST", path: "/v1/billing/activate", description: "Activate Whop license or subscription" },
-            { method: "GET",  path: "/v1/billing/status", description: "Inspect current subscription tier" }
-          ]
-        }),
-        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
+      return respond({
+        name: "CloudLogger",
+        version: "2.0.0",
+        endpoints: [
+          { method: "POST", path: "/v1/auth/register", description: "Create an account" },
+          { method: "POST", path: "/v1/auth/login", description: "Log in" },
+          { method: "GET", path: "/v1/sites", description: "List your sites" },
+          { method: "POST", path: "/v1/sites", description: "Add a site" },
+          { method: "POST", path: "/v1/sites/:id/verify", description: "Prove you own a site" },
+          { method: "POST", path: "/v1/logs", description: "Record an activity from a verified site" },
+          { method: "GET", path: "/v1/logs?project_id=:id", description: "Read activity for one of your sites" }
+        ]
+      });
     }
 
-    // 3. Public Route: User Registration (SaaS Onboarding)
     if (request.method === "POST" && pathname === "/v1/auth/register") {
       try {
         const body = await request.json();
-        const email = body.email?.trim()?.toLowerCase();
-        const password = body.password;
-        const siteName = body.site_name?.trim() || "My First Connected Site";
-        const domain = body.domain?.trim() || "";
-
-        if (!email || !email.includes("@") || !password || password.length < 6) {
-          return new Response(
-            JSON.stringify({ error: "Valid email and password (minimum 6 characters) required" }),
-            { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-          );
+        const email = String(body.email || "").trim().toLowerCase();
+        const password = String(body.password || "");
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 8) {
+          return respond({ error: "Please enter a valid email and a password of at least 8 characters." }, 400);
         }
-
-        const passwordHash = await secureHMAC(password, env.HASHING_SECRET);
         const userId = crypto.randomUUID();
         const apiKey = `cl_live_${crypto.randomUUID().replace(/-/g, "")}`;
-        const siteId = crypto.randomUUID();
-        const cleanSlug = siteName.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
-        const projectId = `${cleanSlug}-${crypto.randomUUID().slice(0, 6)}`;
-
-        // Default plan is pro_monthly_5 ($5/mo SaaS access)
+        const passwordHash = await secureHMAC(password, env.HASHING_SECRET);
         await env.DB.prepare(
-          "INSERT INTO users (id, email, password_hash, api_key, plan, is_active_paid) VALUES (?, ?, ?, ?, ?, ?)"
-        )
-          .bind(userId, email, passwordHash, apiKey, "pro_monthly_5", 1)
-          .run();
-
-        await env.DB.prepare(
-          "INSERT INTO sites (id, user_id, name, project_id, domain) VALUES (?, ?, ?, ?, ?)"
-        )
-          .bind(siteId, userId, siteName, projectId, domain)
-          .run();
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            user: { id: userId, email, api_key: apiKey, plan: "pro_monthly_5", is_active_paid: 1 },
-            site: { id: siteId, user_id: userId, name: siteName, project_id: projectId, domain },
-            token: apiKey,
-            whop: {
-              plan: "Pro SaaS Tier ($5/mo)",
-              provider: "whop.com",
-              checkout_url: whopCheckoutUrl
-            }
-          }),
-          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
+          "INSERT INTO users (id, email, password_hash, api_key) VALUES (?, ?, ?, ?)"
+        ).bind(userId, email, passwordHash, apiKey).run();
+        return respond({ success: true, user: { id: userId, email }, token: apiKey });
       } catch (err) {
-        const isDuplicate = err.message?.includes("UNIQUE constraint") || err.message?.includes("users.email");
-        return new Response(
-          JSON.stringify({
-            error: isDuplicate ? "An account with this email already exists" : "Registration failed",
-            details: err.message
-          }),
-          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        const duplicate = String(err?.message || "").includes("UNIQUE");
+        return respond(
+          { error: duplicate ? "An account with this email already exists." : "We could not create your account." },
+          duplicate ? 409 : 400
         );
       }
     }
 
-    // 4. Public Route: User Login
     if (request.method === "POST" && pathname === "/v1/auth/login") {
       try {
         const body = await request.json();
-        const email = body.email?.trim()?.toLowerCase();
-        const password = body.password;
-
+        const email = String(body.email || "").trim().toLowerCase();
+        const password = String(body.password || "");
         if (!email || !password) {
-          return new Response(
-            JSON.stringify({ error: "Email and password are required" }),
-            { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-          );
+          return respond({ error: "Please enter your email and password." }, 400);
         }
-
         const passwordHash = await secureHMAC(password, env.HASHING_SECRET);
-        const userQuery = await env.DB.prepare(
-          "SELECT id, email, api_key, plan, is_active_paid FROM users WHERE email = ? AND password_hash = ?"
-        )
-          .bind(email, passwordHash)
-          .all();
-
-        const user = userQuery?.results?.[0];
-        if (!user) {
-          return new Response(
-            JSON.stringify({ error: "Invalid email or password credentials" }),
-            { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
-          );
-        }
-
-        const sitesQuery = await env.DB.prepare(
-          "SELECT id, user_id, name, project_id, domain, created_at FROM sites WHERE user_id = ? ORDER BY created_at DESC"
-        )
-          .bind(user.id)
-          .all();
-
-        const sites = sitesQuery?.results ?? [];
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            user: {
-              id: user.id,
-              email: user.email,
-              api_key: user.api_key,
-              plan: user.plan || "pro_monthly_5",
-              is_active_paid: user.is_active_paid !== undefined ? user.is_active_paid : 1
-            },
-            sites,
-            token: user.api_key,
-            whop: {
-              price: "$5/month",
-              provider: "whop.com",
-              checkout_url: whopCheckoutUrl
-            }
-          }),
-          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
-      } catch (err) {
-        return new Response(
-          JSON.stringify({ error: "Authentication failed", details: err.message }),
-          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
+        const query = await env.DB.prepare(
+          "SELECT id, email, api_key FROM users WHERE email = ? AND password_hash = ?"
+        ).bind(email, passwordHash).all();
+        const user = query?.results?.[0];
+        if (!user) return respond({ error: "That email and password do not match." }, 401);
+        return respond({ success: true, user: { id: user.id, email: user.email }, token: user.api_key });
+      } catch {
+        return respond({ error: "We could not log you in." }, 400);
       }
     }
 
-    // 5. Public Route: Whop.com Webhook Handler ($5 SaaS Billing Lifecycle)
+    // Payment provider notifications (server to server).
     if (request.method === "POST" && pathname === "/v1/webhooks/whop") {
       try {
         const payload = await request.json();
         const action = payload.action || payload.event;
         const data = payload.data || {};
-        const email = (data.user?.email || data.email || "").toLowerCase();
+        const email = String(data.user?.email || data.email || "").toLowerCase();
         const membershipId = data.membership_id || data.id || "";
-        const whopUserId = data.user_id || data.user?.id || "";
-
-        if (action === "payment.succeeded" || action === "membership.went_valid") {
-          if (email) {
-            await env.DB.prepare(
-              "UPDATE users SET is_active_paid = 1, plan = 'pro_monthly_5', whop_membership_id = ?, whop_user_id = ? WHERE email = ?"
-            )
-              .bind(membershipId, whopUserId, email)
-              .run();
-          }
-        } else if (action === "membership.went_invalid" || action === "payment.failed") {
-          if (email) {
-            await env.DB.prepare(
-              "UPDATE users SET is_active_paid = 0, plan = 'free' WHERE email = ?"
-            )
-              .bind(email)
-              .run();
-          }
+        const providerUserId = data.user_id || data.user?.id || "";
+        if (email && (action === "payment.succeeded" || action === "membership.went_valid")) {
+          await env.DB.prepare(
+            "UPDATE users SET is_active_paid = 1, plan = 'pro_monthly_5', whop_membership_id = ?, whop_user_id = ? WHERE email = ?"
+          ).bind(membershipId, providerUserId, email).run();
+        } else if (email && (action === "membership.went_invalid" || action === "payment.failed")) {
+          await env.DB.prepare(
+            "UPDATE users SET is_active_paid = 0, plan = 'free' WHERE email = ?"
+          ).bind(email).run();
         }
-
-        return new Response(
-          JSON.stringify({ success: true, processed_event: action, provider: "whop.com" }),
-          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
-      } catch (err) {
-        return new Response(
-          JSON.stringify({ error: "Whop webhook processing failed", details: err.message }),
-          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
+        return respond({ success: true, processed_event: action });
+      } catch {
+        return respond({ error: "Notification could not be processed." }, 400);
       }
     }
 
-    // 6. Global Security Check: Validate incoming Authorization Token for protected routes
+    // ---- Everything below needs a valid key -------------------------------
     const authHeader = request.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized access path" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json", ...corsHeaders }
-      });
+      return respond({ error: "Unauthorized access path" }, 401);
     }
-
     const auth = await authenticateToken(authHeader, env);
-    if (!auth) {
-      return new Response(JSON.stringify({ error: "Invalid API credentials" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json", ...corsHeaders }
-      });
-    }
-
-    // 7. Protected Route: Activate Whop License Key or Direct Upgrade
-    if (request.method === "POST" && pathname === "/v1/billing/activate") {
-      try {
-        const body = await request.json();
-        const licenseKey = body.license_key?.trim();
-
-        if (auth.type === "user") {
-          await env.DB.prepare(
-            "UPDATE users SET is_active_paid = 1, plan = 'pro_monthly_5', whop_membership_id = ? WHERE id = ?"
-          )
-            .bind(licenseKey || "manual_whop_activation", auth.user_id)
-            .run();
-        }
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            plan: "pro_monthly_5",
-            is_active_paid: 1,
-            price: "$5/month",
-            provider: "whop.com",
-            message: "Whop $5 SaaS membership verified and active!"
-          }),
-          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
-      } catch (err) {
-        return new Response(
-          JSON.stringify({ error: "Billing activation failed", details: err.message }),
-          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
-      }
-    }
-
-    // 8. Protected Route: Inspect Billing & Subscription Status
-    if (request.method === "GET" && pathname === "/v1/billing/status") {
-      return new Response(
-        JSON.stringify({
-          success: true,
-          plan: auth.plan || "pro_monthly_5",
-          is_active_paid: auth.is_active_paid === 1,
-          price: "$5.00 USD / month",
-          provider: "whop.com",
-          checkout_url: whopCheckoutUrl
-        }),
-        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
-    }
-
-    // 9. Protected Route: List Connected Sites
-    if (request.method === "GET" && pathname === "/v1/sites") {
-      let sites = [];
-      if (auth.type === "user") {
-        const query = await env.DB.prepare(
-          "SELECT id, user_id, name, project_id, domain, created_at FROM sites WHERE user_id = ? ORDER BY created_at DESC"
-        )
-          .bind(auth.user_id)
-          .all();
-        sites = query?.results ?? [];
-      } else {
-        const query = await env.DB.prepare(
-          "SELECT id, user_id, name, project_id, domain, created_at FROM sites ORDER BY created_at DESC LIMIT 50"
-        ).all();
-        sites = query?.results ?? [];
-      }
-
-      return new Response(JSON.stringify({ success: true, sites }), {
-        status: 200,
-        headers: { "Content-Type": "application/json", ...corsHeaders }
-      });
-    }
-
-    // 10. Protected Route: Connect New Site or Microservice
-    if (request.method === "POST" && pathname === "/v1/sites") {
-      try {
-        const body = await request.json();
-        const siteName = body.name?.trim();
-        const domain = body.domain?.trim() || "";
-        if (!siteName) {
-          return new Response(
-            JSON.stringify({ error: "Site name is required" }),
-            { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-          );
-        }
-
-        const siteId = crypto.randomUUID();
-        const cleanSlug = siteName.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
-        const projectId = body.project_id?.trim() || `${cleanSlug}-${crypto.randomUUID().slice(0, 6)}`;
-        const userId = auth.user_id || "system";
-
-        await env.DB.prepare(
-          "INSERT INTO sites (id, user_id, name, project_id, domain) VALUES (?, ?, ?, ?, ?)"
-        )
-          .bind(siteId, userId, siteName, projectId, domain)
-          .run();
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            site: { id: siteId, user_id: userId, name: siteName, project_id: projectId, domain }
-          }),
-          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
-      } catch (err) {
-        return new Response(
-          JSON.stringify({ error: "Failed to connect new site", details: err.message }),
-          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
-      }
-    }
+    if (!auth) return respond({ error: "Invalid API credentials" }, 401);
 
     const isLogsPath = pathname === "/v1/logs" || pathname === "/";
 
-    // 11. Route A: Ingest Telemetry Logs (POST)
+    // A site key can only record activity, nothing else.
+    if (auth.type === "site" && !(request.method === "POST" && isLogsPath)) {
+      return respond({ error: "This key can only be used to send activity from its own site." }, 403);
+    }
+
+    if (request.method === "GET" && pathname === "/v1/billing/status") {
+      return respond({
+        success: true,
+        plan: auth.plan,
+        is_active_paid: auth.is_active_paid === 1
+      });
+    }
+
+    if (request.method === "GET" && pathname === "/v1/sites") {
+      const query =
+        auth.type === "system"
+          ? await env.DB.prepare(`SELECT ${SITE_COLUMNS} FROM sites ORDER BY created_at DESC LIMIT 50`).all()
+          : await env.DB.prepare(
+              `SELECT ${SITE_COLUMNS} FROM sites WHERE user_id = ? ORDER BY created_at DESC`
+            ).bind(auth.user_id).all();
+      return respond({ success: true, sites: (query?.results ?? []).map(serializeSite) });
+    }
+
+    if (request.method === "POST" && pathname === "/v1/sites") {
+      try {
+        const body = await request.json();
+        const name = String(body.name || "").trim().slice(0, 80);
+        const domain = normalizeDomain(body.domain);
+        if (!name) return respond({ error: "Please give your site a name." }, 400);
+        if (!domain) {
+          return respond({ error: "Please enter your website address, for example mysite.com." }, 400);
+        }
+        const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "site";
+        const site = {
+          id: crypto.randomUUID(),
+          user_id: auth.user_id,
+          name,
+          project_id: `${slug.slice(0, 40)}-${crypto.randomUUID().slice(0, 8)}`,
+          domain,
+          verify_token: crypto.randomUUID().replace(/-/g, ""),
+          ingest_key: `cl_site_${crypto.randomUUID().replace(/-/g, "")}`,
+          verified_at: null
+        };
+        await env.DB.prepare(
+          "INSERT INTO sites (id, user_id, name, project_id, domain, verify_token, ingest_key) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        ).bind(site.id, site.user_id, site.name, site.project_id, site.domain, site.verify_token, site.ingest_key).run();
+        return respond({ success: true, site: serializeSite(site) });
+      } catch {
+        return respond({ error: "We could not add your site." }, 400);
+      }
+    }
+
+    const verifyMatch = pathname.match(/^\/v1\/sites\/([^/]+)\/verify$/);
+    if (request.method === "POST" && verifyMatch) {
+      const query =
+        auth.type === "system"
+          ? await env.DB.prepare(`SELECT ${SITE_COLUMNS} FROM sites WHERE id = ?`).bind(verifyMatch[1]).all()
+          : await env.DB.prepare(`SELECT ${SITE_COLUMNS} FROM sites WHERE id = ? AND user_id = ?`)
+              .bind(verifyMatch[1], auth.user_id).all();
+      const site = query?.results?.[0];
+      if (!site) return respond({ error: "Site not found." }, 404);
+      if (site.verified_at) return respond({ success: true, verified: true });
+      const owned = await checkSiteOwnership(site.domain, site.verify_token);
+      if (!owned) {
+        return respond({
+          success: true,
+          verified: false,
+          message: "We could not find your code on that website yet. Add it, wait a minute, then try again."
+        });
+      }
+      await env.DB.prepare("UPDATE sites SET verified_at = CURRENT_TIMESTAMP WHERE id = ?").bind(site.id).run();
+      return respond({ success: true, verified: true });
+    }
+
+    // Looks up a site by its project id and checks it belongs to the signed-in account.
+    const findOwnedSite = async (projectId) => {
+      const query = await env.DB.prepare(`SELECT ${SITE_COLUMNS} FROM sites WHERE project_id = ? AND user_id = ?`)
+        .bind(projectId, auth.user_id).all();
+      return query?.results?.[0] ?? null;
+    };
+
     if (request.method === "POST" && isLogsPath) {
       try {
         const body = await request.json();
-
-        // Strict Schema Assertions
-        if (!body || !body.project_id || !body.module_name || !body.action || !body.status) {
-          return new Response(
-            JSON.stringify({ error: "Missing required core schema strings" }),
-            {
-              status: 400,
-              headers: { "Content-Type": "application/json", ...corsHeaders }
-            }
-          );
+        const text = (v) => typeof v === "string" && v.trim().length > 0 && v.length <= 120;
+        if (!body || !text(body.project_id) || !text(body.module_name) || !text(body.action) || !text(body.status)) {
+          return respond({ error: "Missing required core schema strings" }, 400);
+        }
+        if (
+          body.payload !== undefined &&
+          (typeof body.payload !== "object" || body.payload === null || Array.isArray(body.payload))
+        ) {
+          return respond({ error: "Invalid schema: payload must be a JSON object" }, 400);
         }
 
-        if (body.payload !== undefined && (typeof body.payload !== "object" || body.payload === null || Array.isArray(body.payload))) {
-          return new Response(
-            JSON.stringify({ error: "Invalid schema: payload must be a JSON object" }),
-            {
-              status: 400,
-              headers: { "Content-Type": "application/json", ...corsHeaders }
-            }
-          );
+        // Ownership: logs are only accepted for a verified site that belongs to the caller.
+        if (auth.type === "site") {
+          if (body.project_id !== auth.project_id) {
+            return respond({ error: "This key belongs to a different site." }, 403);
+          }
+          if (!auth.verified) return respond({ error: "This site has not been verified yet." }, 403);
+          if (!originAllowed(request, auth.domain)) {
+            return respond({ error: "This key can only be used from its own website." }, 403);
+          }
+        } else if (auth.type === "user") {
+          const site = await findOwnedSite(body.project_id);
+          if (!site) return respond({ error: "That site does not belong to your account." }, 403);
+          if (!site.verified_at) return respond({ error: "This site has not been verified yet." }, 403);
         }
 
-        const logId = crypto.randomUUID();
-
-        // Native Edge Web Crypto HMAC Redaction
-        const actorHash = await secureHMAC(body.actor, env.HASHING_SECRET);
-        const ipHash = await secureHMAC(body.metadata?.ip_address, env.HASHING_SECRET);
-
-        // Strip plain-text PII from payload before database persistence
         let payloadObj = {};
-        if (body.payload && typeof body.payload === "object" && !Array.isArray(body.payload)) {
+        if (body.payload) {
           payloadObj = { ...body.payload };
           delete payloadObj.actor;
           delete payloadObj.ip_address;
         }
         const payloadData = JSON.stringify(payloadObj);
+        if (payloadData.length > 8192) return respond({ error: "Details are too large." }, 413);
 
-        // Write directly to Cloudflare D1 high-throughput table
+        const logId = crypto.randomUUID();
+        const actorHash = await secureHMAC(body.actor, env.HASHING_SECRET);
+        const ipHash = await secureHMAC(body.metadata?.ip_address, env.HASHING_SECRET);
+
         await env.DB.prepare(
-          `INSERT INTO system_logs (id, project_id, module_name, event_type, action, actor_hash, status, payload, ip_hash) 
+          `INSERT INTO system_logs (id, project_id, module_name, event_type, action, actor_hash, status, payload, ip_hash)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-          .bind(
-            logId,
-            body.project_id,
-            body.module_name,
-            body.event_type || "INFO",
-            body.action,
-            actorHash,
-            body.status,
-            payloadData,
-            ipHash
-          )
-          .run();
+        ).bind(
+          logId,
+          body.project_id,
+          body.module_name,
+          body.event_type || "INFO",
+          body.action,
+          actorHash,
+          body.status,
+          payloadData,
+          ipHash
+        ).run();
 
-        return new Response(JSON.stringify({ success: true, log_id: logId }), {
-          status: 200,
-          headers: { "Content-Type": "application/json", ...corsHeaders }
-        });
-      } catch (err) {
-        return new Response(
-          JSON.stringify({ error: "Invalid JSON format body structure", details: err.message }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json", ...corsHeaders }
-          }
-        );
+        return respond({ success: true, log_id: logId });
+      } catch {
+        return respond({ error: "Invalid JSON format body structure" }, 400);
       }
     }
 
-    // 12. Route B: Read Logs For Dashboard (GET)
     if (request.method === "GET" && isLogsPath) {
       const projectId = url.searchParams.get("project_id");
-      if (!projectId) {
-        return new Response(
-          JSON.stringify({ error: "Missing project_id url parameter" }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json", ...corsHeaders }
-          }
-        );
+      if (!projectId) return respond({ error: "Missing project_id url parameter" }, 400);
+      if (auth.type === "user" && !(await findOwnedSite(projectId))) {
+        return respond({ error: "That site does not belong to your account." }, 403);
       }
-
       const queryResult = await env.DB.prepare(
         "SELECT * FROM system_logs WHERE project_id = ? ORDER BY created_at DESC LIMIT 200"
-      )
-        .bind(projectId)
-        .all();
-
-      const results = queryResult?.results ?? [];
-
-      return new Response(JSON.stringify(results), {
-        status: 200,
-        headers: { "Content-Type": "application/json", ...corsHeaders }
-      });
+      ).bind(projectId).all();
+      return respond(queryResult?.results ?? []);
     }
 
-    // 13. Fallback Route: 404
-    return new Response(JSON.stringify({ error: "Endpoint route target not found" }), {
-      status: 404,
-      headers: { "Content-Type": "application/json", ...corsHeaders }
-    });
+    return respond({ error: "Endpoint route target not found" }, 404);
   }
 };
