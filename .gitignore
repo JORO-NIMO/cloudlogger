@@ -6,4 +6,6 @@ dist/
 *.log
 .env
 .env.*
+context.md
+
 

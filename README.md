@@ -1,4 +1,4 @@
-# CloudLogger — Edge Log-As-A-Service (Micro-SaaS)
+# CloudLogger - Edge Log-As-A-Service (Micro-SaaS)
 
 A production-ready, serverless, general-purpose logging engine running entirely on Cloudflare's Edge network (**Workers**, **D1 SQLite Database**, and **Pages**).
 
