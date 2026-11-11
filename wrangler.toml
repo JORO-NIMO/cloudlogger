@@ -3,11 +3,8 @@ main = "src/index.js"
 compatibility_date = "2026-11-09"
 
 [vars]
-CLIENT_API_TOKEN = "dev-token-secret-12345"
-HASHING_SECRET = "dev-hashing-salt-secure-98765"
 WHOP_PLAN_PRICE = "5"
 WHOP_CHECKOUT_URL = "https://whop.com/safespaceshub/cloudlogger"
-WHOP_WEBHOOK_SECRET = "whop_webhook_secret_dev"
 
 [[d1_databases]]
 binding = "DB"
