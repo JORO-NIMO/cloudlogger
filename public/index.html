@@ -100,23 +100,30 @@
     .tab[aria-selected=true] { background: var(--navy); color: var(--white); border-color: var(--navy); }
     .toast { position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%); background: var(--navy); color: #fff; padding: .8rem 1.2rem; border-radius: 999px; border: 2px solid var(--orange); z-index: 50; max-width: calc(100% - 2rem); text-align: center; }
 
+    /* Pricing, plan card and alerts */
+    .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-top: .8rem; }
+    .plan-card { border: 2px solid var(--line); border-radius: var(--radius); padding: 1.3rem; background: var(--white); }
+    .plan-card h3 { margin: 0 0 .2rem; }
+    .plan-card .price { font-weight: 800; color: var(--orange-text); margin: 0 0 .6rem; }
+    .plan-card ul { margin: 0; padding-left: 1.1rem; }
+    .plan-card li { margin-bottom: .35rem; }
+    .plan-card-pro { border-color: var(--orange); }
+    .meter-row { margin-top: .8rem; }
+    .meter-label { display: flex; justify-content: space-between; gap: 1rem; font-size: .9rem; color: var(--muted); margin-bottom: .25rem; }
+    .meter { height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; }
+    .meter-fill { height: 100%; background: var(--orange); border-radius: 999px; }
+    .alert-row { display: flex; gap: .5rem; margin-top: .5rem; flex-wrap: wrap; }
+    .alert-row input { flex: 1 1 220px; }
+
     /* Footer */
-    footer.site { background: var(--navy); color: #c7d2e6; padding: 3.5rem 0 2rem; font-size: .93rem; }
+    footer.site { background: var(--navy); color: #c7d2e6; padding: 1.5rem 0; font-size: .9rem; }
     footer.site a { color: #fff; text-decoration: none; }
     footer.site a:hover { color: var(--orange); text-decoration: underline; }
-    .fgrid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 2rem; padding-bottom: 2.5rem; border-bottom: 1px solid #28406b; }
-    .fbrand { display: flex; align-items: center; gap: .7rem; color: #fff; font-weight: 700; margin-bottom: .8rem; }
-    .fbrand img { height: 36px; width: auto; border-radius: 6px; background: #fff; padding: 2px; }
-    footer.site h4 { color: #fff; text-transform: uppercase; letter-spacing: .06em; font-size: .78rem; margin: 0 0 .8rem; }
-    footer.site ul { list-style: none; margin: 0; padding: 0; }
-    footer.site li { margin-bottom: .5rem; }
-    .fsmall { font-size: .85rem; color: #aebbd3; }
-    .channels { display: flex; flex-wrap: wrap; gap: .9rem; margin-top: .5rem; }
-    .fbottom { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding-top: 1.4rem; font-size: .85rem; }
-    .fbottom nav { display: flex; gap: .6rem; flex-wrap: wrap; }
+    .fbottom { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .fbrand { color: #fff; font-weight: 800; letter-spacing: -.01em; }
+    .fbottom nav { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
 
-    @media (max-width: 860px) { .fgrid { grid-template-columns: 1fr 1fr; } .fgrid > :first-child { grid-column: 1 / -1; } }
-    @media (max-width: 520px) { .fgrid { grid-template-columns: 1fr; } .brand { font-size: 1.15rem; } .who { display: none; } }
+    @media (max-width: 520px) { .brand { font-size: 1.15rem; } .who { display: none; } }
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
   </style>
 </head>
@@ -174,6 +181,38 @@
 
     <section class="pane pane-white">
       <div class="wrap">
+        <span class="eyebrow">Pricing</span>
+        <h2>Start free. Upgrade when you grow.</h2>
+        <div class="plans">
+          <div class="plan-card">
+            <h3>Free</h3>
+            <p class="price">$0 forever</p>
+            <ul>
+              <li>1 website</li>
+              <li>1,000 activities each month</li>
+              <li>30 days of history</li>
+              <li>Email alerts when something fails</li>
+            </ul>
+          </div>
+          <div class="plan-card plan-card-pro">
+            <h3>Pro</h3>
+            <p class="price">$5 per month</p>
+            <ul>
+              <li>Up to 10 websites</li>
+              <li>50,000 activities each month</li>
+              <li>1 year of history</li>
+              <li>Everything in Free</li>
+            </ul>
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn btn-primary" data-open="signup" type="button">Create an account</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="pane pane-white">
+      <div class="wrap">
         <span class="eyebrow">Get started</span>
         <h2>Ready when you are.</h2>
         <p>Create your account in under a minute. If you would rather look around first, open the demo to see how everything looks with example activity.</p>
@@ -194,6 +233,17 @@
         <h1>Your websites</h1>
         <button class="btn btn-primary" id="addSiteBtn" type="button">Add a website</button>
       </div>
+
+      <section class="card hidden" id="planCard" aria-label="Your plan">
+        <div class="site-head">
+          <div>
+            <h3 id="planName" style="margin:0;font-size:1.15rem">Plan</h3>
+            <div class="domain" id="planLimits"></div>
+          </div>
+          <a class="btn btn-primary btn-small hidden" id="upgradeBtn" target="_blank" rel="noopener noreferrer" href="#">Upgrade to Pro</a>
+        </div>
+        <div id="planMeters"></div>
+      </section>
 
       <form class="card hidden" id="addSiteForm" novalidate>
         <h2 style="font-size:1.2rem">Add a website</h2>
@@ -244,71 +294,14 @@
 
   <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
 
-  <!-- ========== FOOTER (content copied from safespaceshub.com) ========== -->
+  <!-- ========== FOOTER ========== -->
   <footer class="site">
-    <div class="wrap">
-      <div class="fgrid">
-        <div>
-          <div class="fbrand">
-            <img src="/SafeSpacesLogo.png" alt="Safe Spaces AI Innovation Hub logo" width="36" height="36" />
-            <span>Safe Spaces AI Innovation Hub</span>
-          </div>
-          <p>Safe Spaces AI Innovation Hub - SMC Limited. Advancing ethical artificial intelligence, edge software architecture, and high-impact digital products across East Africa.</p>
-          <p class="fsmall">Chapter: Mbarara, Uganda (HQ)</p>
-          <p class="fsmall">Amazon Building, 4th Floor • Hive Colab<br />Mbarara High Street, Uganda</p>
-          <a class="fsmall" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/place/Safe+Spaces+AI+Innovation+Hub/@-0.6082977,30.6579433,726m/data=!3m2!1e3!4b1!4m6!3m5!1s0x19d91b7bb03ce9e1:0xd3d62bafe2a618b0!8m2!3d-0.6083031!4d30.6605236!16s%2Fg%2F11nr8q6735?entry=ttu">Google Maps Location ↗</a>
-        </div>
-
-        <div>
-          <h4>Products &amp; Tools</h4>
-          <ul>
-            <li><a target="_blank" rel="noopener noreferrer" href="https://mwago.safespaceshub.com/">Mwago - The Remote Mouse</a></li>
-            <li><a target="_blank" rel="noopener noreferrer" href="https://thesurveymat.com">SurveyMat</a></li>
-            <li><a target="_blank" rel="noopener noreferrer" href="https://frontriseug.org">Front Rise Health Uganda</a></li>
-            <li><a target="_blank" rel="noopener noreferrer" href="https://dreameventsug.com">Dream Events Ug</a></li>
-            <li><a target="_blank" rel="noopener noreferrer" href="https://thedokta.safespaceshub.com">The Dokta</a></li>
-            <li><a target="_blank" rel="noopener noreferrer" href="https://pharmasales-hub.web.app/">Pharmasales</a></li>
-            <li><a class="fsmall" href="https://safespaceshub.com/projects">View All Showcase →</a></li>
-          </ul>
-        </div>
-
-        <div>
-          <h4>Services &amp; Focus</h4>
-          <ul>
-            <li><a href="https://safespaceshub.com/services/health">Health technology</a></li>
-            <li><a href="https://safespaceshub.com/services/climate">Climate &amp; sustainability</a></li>
-            <li><a href="https://safespaceshub.com/services/faith">Faith communities</a></li>
-            <li><a href="https://safespaceshub.com/services/education">Education &amp; Learning Platforms</a></li>
-            <li><a href="https://safespaceshub.com/services/ai">AI Tools Development &amp; LLMs</a></li>
-            <li><a href="https://safespaceshub.com/services/custom">Custom Software &amp; Mobile Apps</a></li>
-            <li><a class="fsmall" href="https://safespaceshub.com/services">View All Services →</a></li>
-          </ul>
-        </div>
-
-        <div>
-          <h4>Connect &amp; Inquiries</h4>
-          <ul>
-            <li><a href="mailto:info@safespaceshub.com">info@safespaceshub.com</a></li>
-            <li><a href="tel:+256791219799">+256 791 219 799</a></li>
-            <li><a href="https://safespaceshub.com/reviews">Client Reviews &amp; Testimonials →</a></li>
-          </ul>
-          <p class="fsmall" style="margin:1rem 0 0;text-transform:uppercase">Channels</p>
-          <div class="channels">
-            <a target="_blank" rel="noopener noreferrer" href="https://linkedin.com/company/safe-spacesug/">LinkedIn</a>
-            <a target="_blank" rel="noopener noreferrer" href="https://x.com/SafeSpacesAIHub">X / Twitter</a>
-            <a target="_blank" rel="noopener noreferrer" href="https://github.com/Safe-Spaces-AI">GitHub</a>
-          </div>
-        </div>
-      </div>
-
-      <div class="fbottom">
-        <span>© 2026 Safe Spaces AI Innovation Hub - SMC Limited. All rights reserved.</span>
-        <nav aria-label="Legal">
-          <a href="https://safespaceshub.com/privacy">Privacy Policy</a><span>•</span>
-          <a href="https://safespaceshub.com/terms">Terms of Governance</a><span>•</span>
-          <a href="https://safespaceshub.com/cookies">Security Notice</a>
-        </nav>
-      </div>
+    <div class="wrap fbottom">
+      <span class="fbrand">CloudLogger</span>
+      <nav aria-label="Legal">
+        <a href="https://safespaceshub.com/terms">Terms and Conditions</a><span>•</span>
+        <a href="https://safespaceshub.com/cookies">Cookie Policies</a>
+      </nav>
     </div>
   </footer>
 
@@ -320,7 +313,7 @@
       var state = {
         token: localStorage.getItem('cl_token'),
         email: localStorage.getItem('cl_email'),
-        demo: false, sites: [], activeSite: null, authMode: 'login'
+        demo: false, sites: [], activeSite: null, authMode: 'login', billing: null
       };
 
       // ---- Example content, shown only in the demo ----
@@ -396,11 +389,12 @@
         $('logoutBtn').textContent = state.demo ? 'Leave demo' : 'Log out';
         $('demoBanner').classList.toggle('hidden', !state.demo);
         if (state.demo) $('actionsOut').classList.add('hidden');
+        renderPlanCard();
         window.scrollTo(0, 0);
       }
       function signOut() {
         localStorage.removeItem('cl_token'); localStorage.removeItem('cl_email');
-        state.token = null; state.email = null; state.demo = false; state.sites = []; state.activeSite = null;
+        state.token = null; state.email = null; state.demo = false; state.sites = []; state.activeSite = null; state.billing = null;
         $('activityCard').classList.add('hidden');
         showScreen();
       }
@@ -417,6 +411,45 @@
           state.sites = data.sites || [];
           renderSites();
         } catch (e) { $('sitesList').replaceChildren(el('p', { class: 'msg msg-bad', text: e.message })); }
+      }
+
+      // ---- Plan and usage ----
+      function fmt(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+      async function loadBilling() {
+        if (state.demo || !state.token) { state.billing = null; renderPlanCard(); return; }
+        try { state.billing = await request('/v1/billing/status'); } catch (e) { state.billing = null; }
+        renderPlanCard();
+      }
+
+      function meterRow(label, used, max) {
+        var pct = max ? Math.min(100, Math.round(used / max * 100)) : 0;
+        return el('div', { class: 'meter-row' }, [
+          el('div', { class: 'meter-label' }, [
+            el('span', { text: label }),
+            el('span', { text: fmt(used) + ' of ' + fmt(max) })
+          ]),
+          el('div', { class: 'meter' }, [el('div', { class: 'meter-fill', style: 'width:' + pct + '%' })])
+        ]);
+      }
+
+      function renderPlanCard() {
+        var card = $('planCard');
+        var b = state.billing;
+        if (state.demo || !state.token || !b || !b.limits) { card.classList.add('hidden'); return; }
+        card.classList.remove('hidden');
+        var pro = b.plan !== 'free';
+        $('planName').textContent = pro ? 'Pro plan' : 'Free plan';
+        var retention = b.limits.retention_days >= 365 ? '1 year' : b.limits.retention_days + ' days';
+        $('planLimits').textContent = b.limits.sites + (b.limits.sites === 1 ? ' website · ' : ' websites · ') +
+          fmt(b.limits.logs_per_month) + ' activities per month · ' + retention + ' of history';
+        var up = $('upgradeBtn');
+        if (!pro && b.checkout_url) { up.href = b.checkout_url; up.classList.remove('hidden'); }
+        else up.classList.add('hidden');
+        $('planMeters').replaceChildren(
+          meterRow('Websites', b.usage.sites, b.limits.sites),
+          meterRow('Activities this month', b.usage.logs_this_month, b.limits.logs_per_month)
+        );
       }
 
       function renderSites() {
@@ -458,7 +491,10 @@
           var view = el('button', { class: 'btn btn-dark btn-small', type: 'button', text: 'View activity' });
           view.addEventListener('click', function () { openActivity(site); });
           card.appendChild(el('div', { class: 'btn-row' }, [view]));
-          if (!state.demo) card.appendChild(developerNotes(site));
+          if (!state.demo) {
+            card.appendChild(alertsBlock(site));
+            card.appendChild(developerNotes(site));
+          }
         }
         card.appendChild(msg);
         return card;
@@ -468,6 +504,31 @@
         var b = el('button', { class: 'btn btn-line btn-small', type: 'button', text: 'Copy', style: 'color:var(--navy)' });
         b.addEventListener('click', function () { copyText(text); });
         return b;
+      }
+
+      function alertsBlock(site) {
+        var input = el('input', { type: 'email', placeholder: 'you@example.com', value: site.alert_email || '', 'aria-label': 'Email address for failure alerts' });
+        var msg = el('p', { class: 'msg hidden', role: 'status' });
+        var save = el('button', { class: 'btn btn-primary btn-small', type: 'button', text: 'Save' });
+        var off = el('button', { class: 'btn btn-line btn-small', type: 'button', text: 'Turn off' });
+        async function setAlert(email, note) {
+          save.disabled = true; off.disabled = true; msg.className = 'msg hidden';
+          try {
+            await request('/v1/sites/' + encodeURIComponent(site.id) + '/alerts', { method: 'POST', body: { email: email } });
+            toast(note);
+            await loadSites();
+          } catch (e) { msg.textContent = e.message; msg.className = 'msg msg-bad'; }
+          save.disabled = false; off.disabled = false;
+        }
+        save.addEventListener('click', function () { setAlert(input.value.trim(), 'Alerts saved.'); });
+        off.addEventListener('click', function () { input.value = ''; setAlert('', 'Alerts turned off.'); });
+        return el('details', {}, [
+          el('summary', { text: site.alert_email ? 'Failure alerts → ' + site.alert_email : 'Email me when something fails' }),
+          el('p', { class: 'hint', text: 'When an activity on this website fails, we email this address. At most one email every 30 minutes.' }),
+          el('div', { class: 'alert-row' }, [input]),
+          el('div', { class: 'btn-row' }, [save, off]),
+          msg
+        ]);
       }
 
       function developerNotes(site) {
@@ -548,11 +609,11 @@
         var err = $('addSiteError'); err.classList.add('hidden');
         try {
           await request('/v1/sites', { method: 'POST', body: { name: $('siteName').value, domain: $('siteDomain').value } });
-          $('addSiteForm').reset(); setAddFormOpen(false); await loadSites();
+          $('addSiteForm').reset(); setAddFormOpen(false); await loadSites(); await loadBilling();
           toast('Website added. Now show us it is yours.');
         } catch (ex) { err.textContent = ex.message; err.classList.remove('hidden'); }
       });
-      $('refreshBtn').addEventListener('click', refreshActivity);
+      $('refreshBtn').addEventListener('click', function () { refreshActivity(); loadBilling(); });
 
       // ---- Sign in / create account ----
       var dlg = $('authDialog');
@@ -584,7 +645,7 @@
           var data = await request(path, { method: 'POST', auth: false, body: { email: $('authEmail').value, password: $('authPassword').value } });
           state.token = data.token; state.email = data.user.email; state.demo = false;
           localStorage.setItem('cl_token', state.token); localStorage.setItem('cl_email', state.email);
-          dlg.close(); showScreen(); await loadSites();
+          dlg.close(); showScreen(); await loadSites(); await loadBilling();
         } catch (ex) { err.textContent = ex.message; err.classList.remove('hidden'); }
         btn.disabled = false;
       });

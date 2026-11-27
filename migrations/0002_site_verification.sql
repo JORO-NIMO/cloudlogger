@@ -9,3 +9,4 @@ UPDATE sites SET ingest_key = 'cl_site_' || lower(hex(randomblob(16))) WHERE ing
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_ingest_key ON sites(ingest_key);
 CREATE INDEX IF NOT EXISTS idx_sites_domain ON sites(domain);
+

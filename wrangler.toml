@@ -4,6 +4,18 @@ compatibility_date = "2026-11-09"
 
 # Secrets are NOT stored here. Set them with: npx wrangler secret put <NAME>
 #   HASHING_SECRET, CLIENT_API_TOKEN, WHOP_WEBHOOK_SECRET
+#   RESEND_API_KEY (optional — enables failure-alert emails)
+
+[vars]
+# Where free users go to upgrade. Set this after creating your product in Whop,
+# e.g. WHOP_CHECKOUT_URL = "https://whop.com/checkout/xxxx"
+WHOP_CHECKOUT_URL = ""
+# Sender shown on alert emails. Use an address verified in your Resend account.
+ALERT_FROM_EMAIL = "CloudLogger <onboarding@resend.dev>"
+
+# Daily retention sweep: deletes activity older than each plan allows.
+[triggers]
+crons = ["17 3 * * *"]
 
 [[d1_databases]]
 binding = "DB"

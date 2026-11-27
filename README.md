@@ -7,6 +7,16 @@ A simple, private diary of what happens on your website. It runs entirely on Clo
 - **Database:** `schema.sql` (Cloudflare D1)
 - **Tests:** `test/logger.test.js` (`npm test`)
 
+Full documentation lives in [`docs/`](docs/):
+
+| Document | What it covers |
+| --- | --- |
+| [Architecture](docs/ARCHITECTURE.md) | How the pieces fit together on Cloudflare |
+| [API reference](docs/API.md) | Every endpoint with cURL, Node.js, Python and browser snippets |
+| [MCP endpoint](docs/MCP.md) | Using CloudLogger from AI assistants |
+| [Deployment](docs/DEPLOYMENT.md) | Setup, secrets, local development, operations |
+| [Security & privacy](docs/SECURITY.md) | What is protected, and the honest limitations |
+
 ## How a website becomes trusted
 
 Activity is only accepted for a website its owner has proven they control.
@@ -28,6 +38,21 @@ After verification:
 
 Before anything is saved, the person (`actor`) and `metadata.ip_address` are converted to one-way HMAC-SHA256 hashes using `HASHING_SECRET`. The readable values are never stored.
 
+## Plans
+
+| | Free | Pro ($5/month) |
+| --- | --- | --- |
+| Websites | 1 | 10 |
+| Activities per month | 1,000 | 50,000 |
+| History kept | 30 days | 1 year |
+| Failure alerts by email | ✓ | ✓ |
+
+Limits are enforced server-side (`402` when exceeded). Payments run through
+Whop: its webhook (signature-verified) flips an account to Pro, and
+`GET /v1/billing/status` returns plan, limits, live usage and the checkout
+link. Alert emails are sent through Resend when a failure-like activity is
+recorded — at most one email per site per 30 minutes.
+
 ## Endpoints
 
 | Method | Path | Who | Purpose |
@@ -37,10 +62,15 @@ Before anything is saved, the person (`actor`) and `metadata.ip_address` are con
 | GET | `/v1/sites` | account | List your sites |
 | POST | `/v1/sites` | account | Add a site (`name`, `domain`) |
 | POST | `/v1/sites/:id/verify` | account | Check ownership |
+| POST | `/v1/sites/:id/alerts` | account | Set or clear the failure-alert email |
 | POST | `/v1/logs` | site key or account key | Record activity (`project_id`, `module_name`, `action`, `status`, optional `actor`, `metadata.ip_address`, `payload`) |
 | GET | `/v1/logs?project_id=…` | account | Read activity for your own site |
-| GET | `/v1/billing/status` | account | Plan status |
-| POST | `/v1/webhooks/whop` | payment provider | Plan changes |
+| GET | `/v1/billing/status` | account | Plan, limits and current usage |
+| POST | `/v1/webhooks/whop` | payment provider (signature-verified) | Plan changes |
+| GET | `/v1/openapi.json` | anyone | Machine-readable API description (OpenAPI 3.0) |
+| POST | `/mcp` | account | JSON-RPC 2.0 tools for AI assistants (see [docs/MCP.md](docs/MCP.md)) |
+
+Live: the API is at `https://serverless-logger-api.joronimoamanya.workers.dev` and the dashboard at `https://cloudlogger.pages.dev`.
 
 ## Secrets
 
@@ -51,6 +81,7 @@ Set these with `npx wrangler secret put NAME` (never put them in `wrangler.toml`
 | `HASHING_SECRET` | Long random value used for hashing. Do not change it once people have accounts, or they cannot log in and past hashes stop matching. |
 | `CLIENT_API_TOKEN` | Administrator key. |
 | `WHOP_WEBHOOK_SECRET` | Secret for payment notifications. |
+| `RESEND_API_KEY` | Optional: sends failure-alert emails via Resend. Without it, alerting is skipped. |
 
 ## Deploy
 
@@ -62,12 +93,15 @@ npm test
 npx wrangler d1 create production-logger-db        # copy the id into wrangler.toml
 npx wrangler d1 execute production-logger-db --remote --file=./schema.sql
 
-# Existing database created before site verification
+# Existing databases: run each one-time migration that predates your database
 npx wrangler d1 execute production-logger-db --remote --file=./migrations/0002_site_verification.sql
+npx wrangler d1 execute production-logger-db --remote --file=./migrations/0003_plan_gating.sql
 
 npx wrangler deploy
 npx wrangler pages deploy public --project-name=cloudlogger --branch=production
 ```
+
+For local development, copy your test secrets into `.dev.vars` (git-ignored, never deployed) and run `npx wrangler dev` — full instructions in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 `schema.sql` only creates missing tables, so it is safe to run again. It never deletes data.
 
